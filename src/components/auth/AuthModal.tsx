@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import LoginForm from './LoginForm';
 import SignupForm from './SignupForm';
@@ -13,14 +13,14 @@ interface AuthModalProps {
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode }) => {
   const [mode, setMode] = useState<'login' | 'signup' | 'onboarding'>(initialMode);
-  const { isAuthenticated } = useAuth();
+  const [quizResults, setQuizResults] = useState<{learningStyle?: string, strengths?: string[]}>({});
 
-  // If user becomes authenticated while in login/signup mode, move to onboarding
-  React.useEffect(() => {
-    if (isAuthenticated && (mode === 'login' || mode === 'signup')) {
-      setMode('onboarding');
+  useEffect(() => {
+    if (isOpen) {
+      // Automatically route 'signup' intents to the onboarding quiz
+      setMode(initialMode === 'signup' ? 'onboarding' : initialMode);
     }
-  }, [isAuthenticated, mode]);
+  }, [isOpen, initialMode]);
 
   if (!isOpen) return null;
 
@@ -31,12 +31,16 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode }) =
   };
 
   const switchToLogin = () => setMode('login');
-  const switchToSignup = () => setMode('signup');
+  const switchToSignup = () => setMode('onboarding');
 
-  const handleOnboardingComplete = () => {
-    onClose();
-    // Reset modal state for next opening
-    setTimeout(() => setMode(initialMode), 300);
+  const handleOnboardingComplete = (learningStyle: string, strengths: string[]) => {
+    setQuizResults({ learningStyle, strengths });
+    setMode('signup');
+  };
+
+  const handleOnboardingSkip = () => {
+    setQuizResults({});
+    setMode('signup');
   };
 
   return (
@@ -90,7 +94,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode }) =
 
             {mode === 'signup' && (
               <>
-                <SignupForm />
+                <SignupForm quizResults={quizResults} onCloseModal={onClose} />
                 <p className="text-center mt-4 text-sm text-gray-600">
                   Already have an account?{' '}
                   <button 
@@ -104,7 +108,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode }) =
             )}
 
             {mode === 'onboarding' && (
-              <OnboardingQuiz onComplete={handleOnboardingComplete} />
+              <OnboardingQuiz onComplete={handleOnboardingComplete} onSkip={handleOnboardingSkip} />
             )}
           </div>
         </div>

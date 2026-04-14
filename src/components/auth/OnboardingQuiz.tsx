@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
 import { ArrowRight, Check } from 'lucide-react';
 
 interface OnboardingQuizProps {
-  onComplete: () => void;
+  onComplete: (learningStyle: string, strengths: string[]) => void;
+  onSkip?: () => void;
 }
 
 interface QuizQuestion {
@@ -12,8 +12,7 @@ interface QuizQuestion {
   type: 'single' | 'multiple';
 }
 
-const OnboardingQuiz: React.FC<OnboardingQuizProps> = ({ onComplete }) => {
-  const { completeOnboarding } = useAuth();
+const OnboardingQuiz: React.FC<OnboardingQuizProps> = ({ onComplete, onSkip }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<{ [key: number]: string | string[] }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -120,8 +119,7 @@ const OnboardingQuiz: React.FC<OnboardingQuizProps> = ({ onComplete }) => {
     }
     
     try {
-      await completeOnboarding(learningStyle, strengths);
-      onComplete();
+      onComplete(learningStyle, strengths);
     } catch (error) {
       console.error('Error completing onboarding:', error);
     } finally {
@@ -223,18 +221,23 @@ const OnboardingQuiz: React.FC<OnboardingQuizProps> = ({ onComplete }) => {
       </div>
 
       <div className="flex justify-between items-center pt-4">
-        <button
-          type="button"
-          onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
-            currentStep === 0
-              ? 'text-gray-400 cursor-not-allowed'
-              : 'text-gray-700 hover:bg-gray-100'
-          }`}
-          disabled={currentStep === 0}
-        >
-          Back
-        </button>
+        {currentStep === 0 ? (
+          <button
+            type="button"
+            onClick={onSkip}
+            className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition"
+          >
+            Skip for now
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
+            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition"
+          >
+            Back
+          </button>
+        )}
         
         <button
           type="button"

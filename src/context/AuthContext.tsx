@@ -1,4 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import axios from 'axios';
+
+const API_URL = 'http://localhost:5000/api';
 
 interface User {
   id: string;
@@ -14,10 +17,11 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
+  setUser: (user: User | null) => void;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  signup: (name: string, email: string, password: string) => Promise<void>;
+  signup: (name: string, email: string, password: string, learningStyle?: string, strengths?: string[]) => Promise<void>;
   completeOnboarding: (learningStyle: string, strengths: string[]) => void;
 }
 
@@ -27,44 +31,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // Check for saved user in localStorage
+    // Check for saved user and token in localStorage
     const savedUser = localStorage.getItem('skillswap_user');
+    const savedToken = localStorage.getItem('skillswap_token');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
+    }
+    if (savedToken) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
     }
   }, []);
 
   const login = async (email: string, password: string) => {
-    // Mock authentication
-    // In a real app, this would make an API call
-    const mockUser: User = {
-      id: '1',
-      name: 'Demo User',
-      email,
-      xp: 250,
-      level: 3,
-      streak: 5,
-      badges: ['Quick Learner', 'Helper'],
-    };
-    
-    setUser(mockUser);
-    localStorage.setItem('skillswap_user', JSON.stringify(mockUser));
+    try {
+      const response = await axios.post(`${API_URL}/auth/login`, { email, password });
+      const { user, token } = response.data;
+      setUser(user);
+      localStorage.setItem('skillswap_user', JSON.stringify(user));
+      localStorage.setItem('skillswap_token', token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } catch (error) {
+      console.error("Login failed:", error);
+      throw error;
+    }
   };
 
-  const signup = async (name: string, email: string, password: string) => {
-    // Mock signup
-    const mockUser: User = {
-      id: Math.random().toString(36).substring(2, 9),
-      name,
-      email,
-      xp: 0,
-      level: 1,
-      streak: 0,
-      badges: ['Newcomer'],
-    };
-    
-    setUser(mockUser);
-    localStorage.setItem('skillswap_user', JSON.stringify(mockUser));
+  const signup = async (name: string, email: string, password: string, learningStyle?: string, strengths?: string[]) => {
+    try {
+      const response = await axios.post(`${API_URL}/auth/signup`, { name, email, password, learningStyle, strengths });
+      const { user, token } = response.data;
+      setUser(user);
+      localStorage.setItem('skillswap_user', JSON.stringify(user));
+      localStorage.setItem('skillswap_token', token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } catch (error) {
+      console.error("Signup failed:", error);
+      throw error;
+    }
   };
 
   const completeOnboarding = (learningStyle: string, strengths: string[]) => {
@@ -82,11 +85,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     localStorage.removeItem('skillswap_user');
+    localStorage.removeItem('skillswap_token');
+    delete axios.defaults.headers.common['Authorization'];
   };
 
   return (
     <AuthContext.Provider value={{ 
       user, 
+      setUser,
       isAuthenticated: !!user, 
       login, 
       logout, 

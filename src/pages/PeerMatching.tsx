@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { 
   Users, 
   Search, 
@@ -14,22 +15,11 @@ import {
   Clock,
   Sliders
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-
-interface Peer {
-  id: string;
-  name: string;
-  avatar: string;
-  role: 'teacher' | 'learner';
-  skills: string[];
-  rating: number;
-  reviews: number;
-  distance: string;
-  matchScore: number;
-  location: string;
-  hourlyRate?: number;
-  availability?: string[];
-}
+import { Peer } from '../types';
+import PeerCard from '../components/matching/PeerCard';
+import PeerModal from '../components/matching/PeerModal';
 
 // Mock data for peers
 const mockPeers: Peer[] = [
@@ -118,8 +108,8 @@ type SortOption = 'match' | 'rating' | 'distance';
 
 const PeerMatching: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
-  const [peers, setPeers] = useState<Peer[]>(mockPeers);
-  const [filteredPeers, setFilteredPeers] = useState<Peer[]>(mockPeers);
+  const [peers, setPeers] = useState<Peer[]>([]);
+  const [filteredPeers, setFilteredPeers] = useState<Peer[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<FilterRole>('all');
   const [sortBy, setSortBy] = useState<SortOption>('match');
@@ -129,6 +119,17 @@ const PeerMatching: React.FC = () => {
   const [selectedPeer, setSelectedPeer] = useState<Peer | null>(null);
   const [showModal, setShowModal] = useState(false);
   
+  useEffect(() => {
+    if (isAuthenticated) {
+      axios.get('http://localhost:5000/api/peers')
+        .then(res => {
+          setPeers(res.data.peers);
+          setFilteredPeers(res.data.peers);
+        })
+        .catch(err => console.error("Error fetching peers:", err));
+    }
+  }, [isAuthenticated]);
+
   // All available skills from the peers
   const allSkills = Array.from(new Set(peers.flatMap(peer => peer.skills))).sort();
 
@@ -240,15 +241,16 @@ const PeerMatching: React.FC = () => {
                 placeholder="Search skills, topics, or names..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
               />
             </div>
             
-            <div className="flex space-x-2">
-              <div className="relative">
+            <div className="flex flex-wrap md:flex-nowrap space-x-2 gap-y-2">
+              <div className="relative flex-1 md:flex-none">
                 <select
                   value={filterRole}
                   onChange={(e) => setFilterRole(e.target.value as FilterRole)}
-                  className="appearance-none pl-3 pr-10 py-2.5 border border-gray-300 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full appearance-none pl-3 pr-10 py-2.5 border border-gray-300 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All Roles</option>
                   <option value="teacher">Teachers</option>
@@ -259,11 +261,11 @@ const PeerMatching: React.FC = () => {
                 </div>
               </div>
               
-              <div className="relative">
+              <div className="relative flex-1 md:flex-none">
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="appearance-none pl-3 pr-10 py-2.5 border border-gray-300 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full appearance-none pl-3 pr-10 py-2.5 border border-gray-300 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="match">Best Match</option>
                   <option value="rating">Highest Rated</option>
@@ -276,15 +278,15 @@ const PeerMatching: React.FC = () => {
               
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+                className="flex items-center justify-center flex-none px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
               >
-                <Filter className="h-5 w-5 mr-1" />
-                <span className="hidden sm:inline">Filters</span>
+                <Filter className="h-5 w-5 md:mr-1" />
+                <span className="hidden md:inline">Filters</span>
               </button>
               
               <button
                 onClick={applyFilters}
-                className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                className="flex-none px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
               >
                 Search
               </button>
@@ -292,76 +294,88 @@ const PeerMatching: React.FC = () => {
           </div>
           
           {/* Advanced Filters Panel */}
-          {showFilters && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-medium text-gray-800">Advanced Filters</h3>
-                <button
-                  onClick={() => setShowFilters(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Skills
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {allSkills.map((skill) => (
-                      <button
-                        key={skill}
-                        onClick={() => toggleSkill(skill)}
-                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
-                          selectedSkills.includes(skill)
-                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                            : 'bg-gray-100 text-gray-700 border border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        {skill}
-                      </button>
-                    ))}
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-medium text-gray-800 flex items-center">
+                      <Sliders className="w-4 h-4 mr-2" />
+                      Advanced Filters
+                    </h3>
+                    <button
+                      onClick={() => setShowFilters(false)}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Skills
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {allSkills.map((skill) => (
+                          <button
+                            key={skill}
+                            onClick={() => toggleSkill(skill)}
+                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                              selectedSkills.includes(skill)
+                                ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                : 'bg-gray-100 text-gray-700 border border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            {skill}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Maximum Distance: {maxDistance} miles
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={maxDistance}
+                        onChange={(e) => setMaxDistance(parseInt(e.target.value))}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>1 mile</span>
+                        <span>5 miles</span>
+                        <span>10+ miles</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end mt-6 space-x-3">
+                    <button
+                      onClick={resetFilters}
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      onClick={applyFilters}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                    >
+                      Apply Filters
+                    </button>
                   </div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Maximum Distance: {maxDistance} miles
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    value={maxDistance}
-                    onChange={(e) => setMaxDistance(parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>1 mile</span>
-                    <span>5 miles</span>
-                    <span>10+ miles</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex justify-end mt-6 space-x-3">
-                <button
-                  onClick={resetFilters}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Reset
-                </button>
-                <button
-                  onClick={applyFilters}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                >
-                  Apply Filters
-                </button>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
         
         {/* Results Section */}
@@ -382,71 +396,16 @@ const PeerMatching: React.FC = () => {
             )}
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPeers.map((peer) => (
-              <div 
-                key={peer.id} 
-                className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition overflow-hidden cursor-pointer"
-                onClick={() => handlePeerSelect(peer)}
-              >
-                <div className="p-5">
-                  <div className="flex items-start">
-                    <img 
-                      src={peer.avatar} 
-                      alt={peer.name} 
-                      className="w-14 h-14 rounded-full object-cover mr-4"
-                    />
-                    <div className="flex-grow">
-                      <div className="flex justify-between items-start">
-                        <h3 className="font-bold text-gray-900">{peer.name}</h3>
-                        <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${
-                          peer.role === 'teacher' 
-                            ? 'bg-blue-100 text-blue-800' 
-                            : 'bg-green-100 text-green-800'
-                        }`}>
-                          {peer.role === 'teacher' ? 'Teacher' : 'Learner'}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center text-sm text-gray-500 mb-2">
-                        <Star className="w-4 h-4 text-yellow-400 mr-1" />
-                        <span>{peer.rating}</span>
-                        <span className="mx-1">•</span>
-                        <span>{peer.reviews} reviews</span>
-                      </div>
-                      
-                      <div className="flex items-center text-sm text-gray-500 mb-3">
-                        <MapPin className="w-4 h-4 mr-1" />
-                        <span>{peer.distance} away • {peer.location}</span>
-                      </div>
-                      
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {peer.skills.map((skill, idx) => (
-                          <span 
-                            key={idx}
-                            className="inline-block px-2 py-0.5 bg-gray-100 text-gray-800 text-xs rounded-full"
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <div className="text-sm">
-                          <span className="font-medium text-blue-700">{peer.matchScore}%</span>
-                          <span className="text-gray-500"> match with your profile</span>
-                        </div>
-                        
-                        <button className="p-2 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition">
-                          <MessageSquare className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <motion.div 
+            layout
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            <AnimatePresence>
+              {filteredPeers.map((peer) => (
+                <PeerCard key={peer.id} peer={peer} onClick={handlePeerSelect} />
+              ))}
+            </AnimatePresence>
+          </motion.div>
           
           {filteredPeers.length === 0 && (
             <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
@@ -464,8 +423,9 @@ const PeerMatching: React.FC = () => {
         </div>
         
         {/* Expand Your Network Section */}
-        <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl shadow-lg overflow-hidden">
-          <div className="py-8 px-6 md:px-10">
+        <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl shadow-lg overflow-hidden relative group">
+          <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity duration-300 pointer-events-none"></div>
+          <div className="py-8 px-6 md:px-10 relative z-10">
             <div className="flex flex-col md:flex-row md:items-center justify-between">
               <div className="mb-6 md:mb-0 md:mr-8">
                 <h2 className="text-2xl font-bold text-white mb-2">Expand Your Learning Network</h2>
@@ -474,7 +434,7 @@ const PeerMatching: React.FC = () => {
                   your learning goals and teaching style.
                 </p>
               </div>
-              <button className="px-6 py-3 bg-white text-purple-600 font-medium rounded-lg hover:shadow-lg transition transform hover:-translate-y-1 whitespace-nowrap flex items-center justify-center">
+              <button className="px-6 py-3 bg-white text-purple-600 font-medium rounded-lg shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 whitespace-nowrap flex items-center justify-center">
                 Share Profile
                 <ArrowRight className="ml-2 w-5 h-5" />
               </button>
@@ -483,179 +443,16 @@ const PeerMatching: React.FC = () => {
         </div>
       </div>
       
-      {/* Peer Details Modal */}
-      {showModal && selectedPeer && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div 
-            className="bg-white rounded-xl shadow-xl w-full max-w-3xl overflow-hidden transition-all duration-300 transform"
-            style={{
-              opacity: showModal ? 1 : 0,
-              scale: showModal ? 1 : 0.95,
-            }}
-          >
-            <div className="relative">
-              <button 
-                onClick={() => setShowModal(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-full hover:bg-gray-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              <div className="p-6">
-                <div className="flex items-start mb-6">
-                  <img 
-                    src={selectedPeer.avatar} 
-                    alt={selectedPeer.name} 
-                    className="w-20 h-20 rounded-full object-cover mr-5"
-                  />
-                  <div>
-                    <div className="flex items-center mb-1">
-                      <h2 className="text-2xl font-bold text-gray-900 mr-2">{selectedPeer.name}</h2>
-                      <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${
-                        selectedPeer.role === 'teacher' 
-                          ? 'bg-blue-100 text-blue-800' 
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {selectedPeer.role === 'teacher' ? 'Teacher' : 'Learner'}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center text-gray-500 text-sm mb-2">
-                      <MapPin className="w-4 h-4 mr-1" />
-                      <span>{selectedPeer.location} ({selectedPeer.distance} away)</span>
-                    </div>
-                    
-                    <div className="flex items-center">
-                      <div className="flex items-center mr-3">
-                        <Star className="w-4 h-4 text-yellow-400 mr-1" />
-                        <span className="font-medium">{selectedPeer.rating}</span>
-                        <span className="text-gray-500 text-sm ml-1">({selectedPeer.reviews} reviews)</span>
-                      </div>
-                      <div className="text-sm">
-                        <span className="font-medium text-blue-700">{selectedPeer.matchScore}%</span>
-                        <span className="text-gray-500"> match</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div>
-                    <h3 className="font-medium text-gray-900 mb-3">Skills</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedPeer.skills.map((skill, idx) => (
-                        <span 
-                          key={idx}
-                          className="inline-block px-3 py-1 bg-gray-100 text-gray-800 text-sm rounded-full"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {selectedPeer.role === 'teacher' && (
-                    <div>
-                      <h3 className="font-medium text-gray-900 mb-3">Availability</h3>
-                      <div className="space-y-2">
-                        {selectedPeer.availability?.map((slot, idx) => (
-                          <div key={idx} className="flex items-center text-sm text-gray-700">
-                            <Clock className="w-4 h-4 text-gray-500 mr-2" />
-                            <span>{slot}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="mt-3 text-sm text-gray-600">
-                        Hourly Rate: <span className="font-medium">${selectedPeer.hourlyRate}</span>
-                      </p>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="mb-6">
-                  <h3 className="font-medium text-gray-900 mb-3">Why You Match</h3>
-                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                    <div className="flex items-start">
-                      <div className="mr-3 mt-1">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                          <Check className="w-5 h-5 text-blue-600" />
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-gray-700">
-                          Based on your {user?.learningStyle} learning style and interests in 
-                          {selectedPeer.skills.slice(0, 2).map((skill, i) => (
-                            <span key={i}> {skill}{i < 1 ? ' and' : ''}</span>
-                          ))}, {selectedPeer.name} is a great match for your learning journey.
-                        </p>
-                        <p className="mt-2 text-gray-700">
-                          {selectedPeer.role === 'teacher' 
-                            ? `Their teaching approach aligns well with your learning preferences.`
-                            : `Their learning goals complement your interests, making for great mutual learning.`}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {selectedPeer.role === 'teacher' && (
-                  <div className="mb-6">
-                    <h3 className="font-medium text-gray-900 mb-3">Schedule a Session</h3>
-                    <div className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-center mb-4">
-                        <div className="flex items-center">
-                          <Calendar className="w-5 h-5 text-gray-500 mr-2" />
-                          <span className="font-medium">Select a Date & Time</span>
-                        </div>
-                        <button className="text-blue-600 text-sm font-medium hover:text-blue-800">
-                          See more availability
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-3 gap-3 mb-4">
-                        {['Mon, Oct 15', 'Tue, Oct 16', 'Wed, Oct 17'].map((date, i) => (
-                          <button 
-                            key={i}
-                            className="p-2 text-center border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
-                          >
-                            <span className="block text-sm font-medium">{date.split(',')[0]}</span>
-                            <span className="block text-gray-500 text-sm">{date.split(',')[1]}</span>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-4 gap-2">
-                        {['2:00 PM', '3:00 PM', '4:30 PM', '5:45 PM'].map((time, i) => (
-                          <button 
-                            key={i}
-                            className="p-2 text-sm border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
-                          >
-                            {time}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex space-x-3">
-                  <button className="flex-1 py-3 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition flex items-center justify-center">
-                    <MessageSquare className="w-5 h-5 mr-2" />
-                    Message
-                  </button>
-                  {selectedPeer.role === 'teacher' ? (
-                    <button className="flex-1 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition">
-                      Book a Session
-                    </button>
-                  ) : (
-                    <button className="flex-1 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition">
-                      Connect
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Peer Details Modal using AnimatePresence inside the PeerModal component or conditionally rendered here */}
+      <AnimatePresence>
+        {showModal && (
+          <PeerModal 
+            peer={selectedPeer} 
+            isOpen={showModal} 
+            onClose={() => setShowModal(false)} 
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

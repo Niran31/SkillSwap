@@ -15,6 +15,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
 // Defining tabs
@@ -22,7 +23,20 @@ type TabType = 'learn' | 'teach';
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('learn');
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
+  
+  React.useEffect(() => {
+    if (user && user.id) {
+      axios.get(`http://localhost:5000/api/auth/profile/${user.id}`)
+        .then(res => {
+          if (res.data && res.data.user) {
+            setUser(res.data.user);
+            localStorage.setItem('skillswap_user', JSON.stringify(res.data.user));
+          }
+        })
+        .catch(err => console.error("Error syncing profile:", err));
+    }
+  }, [user?.id, setUser]);
   
   if (!user) {
     return (
