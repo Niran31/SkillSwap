@@ -7,8 +7,10 @@ import Dashboard from './pages/Dashboard';
 import QuestionGenerator from './pages/QuestionGenerator';
 import PeerMatching from './pages/PeerMatching';
 import ProfilePage from './pages/ProfilePage';
+import Messages from './pages/Messages';
 import { AuthProvider } from './context/AuthContext';
 import AuthModal from './components/auth/AuthModal';
+import { Toaster } from 'sonner';
 
 function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -40,6 +42,7 @@ function App() {
               <Route path="/question-generator" element={<QuestionGenerator />} />
               <Route path="/peer-matching" element={<PeerMatching />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/messages" element={<Messages />} />
             </Routes>
           </main>
           <Footer />
@@ -48,6 +51,7 @@ function App() {
             onClose={closeAuthModal} 
             initialMode={authMode} 
           />
+          <Toaster position="bottom-right" richColors />
         </div>
       </Router>
     </AuthProvider>

@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
-const SignupForm: React.FC = () => {
+interface SignupFormProps {
+  quizResults?: { learningStyle?: string; strengths?: string[] };
+  onCloseModal?: () => void;
+}
+
+const SignupForm: React.FC<SignupFormProps> = ({ quizResults, onCloseModal }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,8 +37,8 @@ const SignupForm: React.FC = () => {
     setError('');
     
     try {
-      await signup(name, email, password);
-      // The auth context will automatically handle the transition to onboarding
+      await signup(name, email, password, quizResults?.learningStyle, quizResults?.strengths);
+      if (onCloseModal) onCloseModal();
     } catch (err) {
       setError('Error creating account. Please try again.');
     } finally {
