@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { toast } from 'sonner';
 
 type TabType = 'overview' | 'skills' | 'achievements' | 'sessions';
 
@@ -36,7 +38,41 @@ const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
 
   const [isEditingBio, setIsEditingBio] = useState(false);
-  const [bio, setBio] = useState("I'm a software developer passionate about frontend technologies like React and Vue. Currently learning AI and machine learning fundamentals. I love sharing knowledge and helping others grow!");
+  const [bio, setBio] = useState(user?.bio || "I'm a passionate learner on SkillSwap!");
+  const [userSessions, setUserSessions] = useState<any[]>([]);
+  const [learningStats, setLearningStats] = useState({
+    totalHours: 0,
+    coursesCompleted: user?.badges?.length || 0,
+    sessionsAttended: 0,
+    averageRating: 0
+  });
+
+  React.useEffect(() => {
+    if (user?.id) {
+      setBio(user.bio || "I'm a passionate learner on SkillSwap!");
+      // Fetch user's sessions
+      axios.get(`/api/sessions/${user.id}`).then(res => {
+        const fetchedSessions = res.data.sessions || [];
+        setUserSessions(fetchedSessions);
+        setLearningStats(prev => ({
+          ...prev,
+          sessionsAttended: fetchedSessions.length,
+          totalHours: Math.round(fetchedSessions.length * 1.5)
+        }));
+      }).catch(err => console.error("Error fetching sessions:", err));
+    }
+  }, [user]);
+
+  const saveBio = async () => {
+    try {
+      await axios.put(`/api/auth/profile/${user?.id}`, { bio });
+      setIsEditingBio(false);
+      toast.success('Bio updated successfully!');
+      if (user) user.bio = bio; // optimistic update
+    } catch (e) {
+      toast.error('Failed to update bio.');
+    }
+  };
 
   if (!isAuthenticated) {
     return (
@@ -49,83 +85,16 @@ const ProfilePage: React.FC = () => {
     );
   }
 
-  // Mock skills data
-  const skills = [
-    { name: 'JavaScript', level: 85, endorsements: 12 },
-    { name: 'React', level: 78, endorsements: 8 },
-    { name: 'UI/UX Design', level: 65, endorsements: 5 },
-    { name: 'Node.js', level: 70, endorsements: 6 },
-    { name: 'Python', level: 45, endorsements: 2 },
-  ];
-  
-  // Mock achievement data
+  // Mock achievement logic fallback
   const achievements = [
     { 
       id: 1, 
       name: 'Quick Learner', 
-      description: 'Completed 5 courses in under 30 days', 
+      description: 'Engaged seamlessly on the platform.', 
       icon: <Zap className="w-6 h-6 text-yellow-500" />, 
-      date: 'Earned Sep 15, 2025' 
-    },
-    { 
-      id: 2, 
-      name: 'Helper', 
-      description: 'Taught 10 different students', 
-      icon: <Award className="w-6 h-6 text-blue-500" />, 
-      date: 'Earned Oct 2, 2025' 
-    },
-    { 
-      id: 3, 
-      name: 'Streak Master', 
-      description: 'Maintained a 30-day learning streak', 
-      icon: <Flame className="w-6 h-6 text-orange-500" />, 
-      date: 'In progress (25/30 days)' 
-    },
+      date: 'Earned' 
+    }
   ];
-  
-  // Mock session data
-  const sessions = [
-    { 
-      id: 1, 
-      title: 'Advanced React Hooks', 
-      role: 'learner', 
-      partner: 'David Chen', 
-      date: 'Sep 28, 2025', 
-      time: '3:00 PM', 
-      duration: '60 min',
-      status: 'completed',
-      rating: 5
-    },
-    { 
-      id: 2, 
-      title: 'JavaScript Basics', 
-      role: 'teacher', 
-      partner: 'Emily Chang', 
-      date: 'Oct 2, 2025', 
-      time: '2:30 PM', 
-      duration: '45 min',
-      status: 'completed',
-      rating: 4
-    },
-    { 
-      id: 3, 
-      title: 'UI Design Principles', 
-      role: 'learner', 
-      partner: 'James Wilson', 
-      date: 'Oct 15, 2025', 
-      time: '4:00 PM', 
-      duration: '60 min',
-      status: 'upcoming'
-    },
-  ];
-
-  // Mock learning stats
-  const learningStats = {
-    totalHours: 48,
-    coursesCompleted: 7,
-    sessionsAttended: 12,
-    averageRating: 4.8
-  };
 
   const handleLogout = () => {
     logout();
@@ -194,7 +163,10 @@ const ProfilePage: React.FC = () => {
                   <div className="flex justify-between items-start">
                     <h3 className="font-medium text-gray-900 mb-2">About Me</h3>
                     <button 
-                      onClick={() => setIsEditingBio(!isEditingBio)}
+                      onClick={() => {
+                        if (isEditingBio) saveBio();
+                        else setIsEditingBio(true);
+                      }}
                       className="text-blue-600 hover:text-blue-800 transition"
                     >
                       {isEditingBio ? (
@@ -435,7 +407,7 @@ const ProfilePage: React.FC = () => {
                   </button>
                 </div>
                 <div className="space-y-4">
-                  {skills.slice(0, 3).map((skill, index) => (
+                  {(user?.customSkills && user.customSkills.length > 0 ? user.customSkills : []).slice(0, 3).map((skill, index) => (
                     <div key={index}>
                       <div className="flex justify-between items-center mb-1">
                         <div className="font-medium text-gray-900">{skill.name}</div>
@@ -449,6 +421,9 @@ const ProfilePage: React.FC = () => {
                       </div>
                     </div>
                   ))}
+                  {(!user?.customSkills || user.customSkills.length === 0) && (
+                    <div className="text-gray-500 text-sm">Add some skills to track your progress!</div>
+                  )}
                 </div>
               </div>
               
@@ -466,9 +441,9 @@ const ProfilePage: React.FC = () => {
                     View all sessions
                   </button>
                 </div>
-                {sessions.filter(s => s.status === 'upcoming').length > 0 ? (
+                {userSessions.filter(s => s.status === 'upcoming' || s.status === 'scheduled').length > 0 ? (
                   <div className="space-y-4">
-                    {sessions.filter(s => s.status === 'upcoming').map((session) => (
+                    {userSessions.filter(s => s.status === 'upcoming' || s.status === 'scheduled').map((session) => (
                       <div key={session.id} className="flex items-start p-3 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition cursor-pointer">
                         <div className="mr-3">
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
@@ -481,7 +456,7 @@ const ProfilePage: React.FC = () => {
                           </div>
                         </div>
                         <div className="flex-grow">
-                          <div className="font-medium text-gray-900">{session.title}</div>
+                          <div className="font-medium text-gray-900">{session.topic || session.title}</div>
                           <div className="text-sm text-gray-600">
                             {session.role === 'teacher' ? 'Teaching' : 'Learning from'} {session.partner}
                           </div>
@@ -523,61 +498,55 @@ const ProfilePage: React.FC = () => {
               </div>
               
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                {skills.map((skill, index) => (
-                  <div 
-                    key={index} 
-                    className={`p-6 ${index !== skills.length - 1 ? 'border-b border-gray-200' : ''}`}
-                  >
-                    <div className="flex flex-col md:flex-row md:items-center justify-between">
-                      <div className="mb-4 md:mb-0 md:mr-4">
-                        <h3 className="font-medium text-gray-900 mb-1">{skill.name}</h3>
-                        <div className="flex items-center">
-                          <span className="text-sm text-gray-600 mr-2">Endorsements: {skill.endorsements}</span>
-                          <div className="flex -space-x-1">
-                            {[...Array(Math.min(3, skill.endorsements))].map((_, i) => (
-                              <div key={i} className="w-5 h-5 rounded-full bg-gray-200 border border-white"></div>
-                            ))}
-                            {skill.endorsements > 3 && (
-                              <div className="w-5 h-5 rounded-full bg-gray-100 border border-white flex items-center justify-center">
-                                <span className="text-xs text-gray-500">+{skill.endorsements - 3}</span>
-                              </div>
-                            )}
+                {(!user?.customSkills || user.customSkills.length === 0) ? (
+                  <div className="p-6 text-center text-gray-500">No skills added yet. Click "Add New Skill" to start!</div>
+                ) : (
+                  user?.customSkills.map((skill, index) => (
+                    <div 
+                      key={index} 
+                      className={`p-6 ${index !== user.customSkills!.length - 1 ? 'border-b border-gray-200' : ''}`}
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between">
+                        <div className="mb-4 md:mb-0 md:mr-4">
+                          <h3 className="font-medium text-gray-900 mb-1">{skill.name}</h3>
+                          <div className="flex items-center">
+                            <span className="text-sm text-gray-600 mr-2">Endorsements: 0</span>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex-grow md:max-w-md">
-                        <div className="flex justify-between items-center mb-1">
-                          <div className="text-xs font-medium text-gray-700">
-                            Proficiency Level: {skill.level}%
+                        <div className="flex-grow md:max-w-md">
+                          <div className="flex justify-between items-center mb-1">
+                            <div className="text-xs font-medium text-gray-700">
+                              Proficiency Level: {skill.level}%
+                            </div>
+                            <div className="text-xs font-medium text-gray-500">
+                              {skill.level < 40 ? 'Beginner' : 
+                               skill.level < 70 ? 'Intermediate' : 
+                               'Advanced'}
+                            </div>
                           </div>
-                          <div className="text-xs font-medium text-gray-500">
-                            {skill.level < 40 ? 'Beginner' : 
-                             skill.level < 70 ? 'Intermediate' : 
-                             'Advanced'}
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div 
+                              className={`h-2.5 rounded-full ${
+                                skill.level < 40 ? 'bg-blue-400' : 
+                                skill.level < 70 ? 'bg-blue-500' : 
+                                'bg-blue-600'
+                              }`}
+                              style={{ width: `${skill.level}%` }}
+                            ></div>
                           </div>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                          <div 
-                            className={`h-2.5 rounded-full ${
-                              skill.level < 40 ? 'bg-blue-400' : 
-                              skill.level < 70 ? 'bg-blue-500' : 
-                              'bg-blue-600'
-                            }`}
-                            style={{ width: `${skill.level}%` }}
-                          ></div>
+                        <div className="mt-4 md:mt-0 md:ml-4 flex">
+                          <button className="text-gray-400 hover:text-gray-600 mr-2">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button className="text-gray-400 hover:text-red-600">
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
-                      </div>
-                      <div className="mt-4 md:mt-0 md:ml-4 flex">
-                        <button className="text-gray-400 hover:text-gray-600 mr-2">
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button className="text-gray-400 hover:text-red-600">
-                          <X className="w-4 h-4" />
-                        </button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
               
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -756,15 +725,15 @@ const ProfilePage: React.FC = () => {
               </div>
               
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                {sessions.map((session, index) => (
+                {userSessions.map((session, index) => (
                   <div 
-                    key={session.id} 
-                    className={`p-6 ${index !== sessions.length - 1 ? 'border-b border-gray-200' : ''}`}
+                    key={session.id || index} 
+                    className={`p-6 ${index !== userSessions.length - 1 ? 'border-b border-gray-200' : ''}`}
                   >
                     <div className="flex flex-col md:flex-row md:items-center justify-between">
                       <div className="mb-4 md:mb-0">
                         <div className="flex items-center mb-1">
-                          <h3 className="font-medium text-gray-900 mr-2">{session.title}</h3>
+                          <h3 className="font-medium text-gray-900 mr-2">{session.topic || session.title}</h3>
                           <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${
                             session.status === 'upcoming' 
                               ? 'bg-blue-100 text-blue-800' 

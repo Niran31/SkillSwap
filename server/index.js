@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ override: true });
 
 const app = express();
 const server = http.createServer(app);
@@ -27,8 +27,17 @@ io.on('connection', (socket) => {
     console.log(`User with ID: ${socket.id} joined room: ${data}`);
   });
 
-  socket.on('send_message', (data) => {
+  socket.on('send_message', async (data) => {
     socket.to(data.room).emit('receive_message', data);
+    // Save to database
+    try {
+      if (isDbConnected()) {
+        const Message = (await import('./models/Message.js')).default;
+        await Message.create(data);
+      }
+    } catch (err) {
+      console.error('Error saving message:', err);
+    }
   });
 
   socket.on('disconnect', () => {
@@ -44,11 +53,36 @@ app.use(express.json());
 import authRoutes from './routes/authRoutes.js';
 import peerRoutes from './routes/peerRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
+import reviewRoutes from './routes/reviewRoutes.js';
+import sessionRoutes from './routes/sessionRoutes.js';
+import messageRoutes from './routes/messageRoutes.js';
+import gamificationRoutes from './routes/gamificationRoutes.js';
+
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Setup Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/peers', peerRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/sessions', sessionRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/gamification', gamificationRoutes);
+
+// Serve static frontend in production
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+if (process.env.NODE_ENV === 'production' || process.env.SERVE_STATIC === 'true') {
+  app.use(express.static(path.join(__dirname, '../dist')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve(__dirname, '../dist', 'index.html'));
+  });
+}
+
+let dbStatus = false;
+export const isDbConnected = () => dbStatus;
 
 // Mock DB connection if URI is placeholder or invalid
 const connectDB = async () => {
@@ -61,6 +95,7 @@ const connectDB = async () => {
     
     await mongoose.connect(uri);
     console.log('MongoDB Connected Successfully');
+    dbStatus = true;
     return true;
   } catch (err) {
     console.error('MongoDB Connection Error: ', err.message);

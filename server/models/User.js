@@ -7,6 +7,11 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   learningStyle: { type: String, default: 'Visual' },
   strengths: { type: [String], default: [] },
+  bio: { type: String, default: 'I am a passionate learner on SkillSwap!' },
+  customSkills: [{ 
+    name: { type: String },
+    level: { type: Number, default: 0 }
+  }],
   xp: { type: Number, default: 0 },
   level: { type: Number, default: 1 },
   streak: { type: Number, default: 0 },

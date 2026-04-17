@@ -27,7 +27,7 @@ const QuestionGenerator: React.FC = () => {
     setCurrentTopic(data.topic);
     
     // API call to the backend
-    axios.post('http://localhost:5000/api/ai/generate', data)
+    axios.post('/api/ai/generate', data)
       .then(response => {
         setGeneratedQuestions(response.data.questions);
         setAnsweredCorrectly([]); // Reset answered questions for new batch
@@ -46,7 +46,7 @@ const QuestionGenerator: React.FC = () => {
     setAnsweredCorrectly(prev => [...prev, questionId]);
 
     try {
-      await axios.post('http://localhost:5000/api/auth/xp', {
+      await axios.post('/api/auth/xp', {
         userId: user?.id,
         xpAmount: 10
       });

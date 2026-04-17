@@ -17,10 +17,11 @@ const PeerCard: React.FC<PeerCardProps> = ({ peer, onClick }) => {
       exit={{ opacity: 0, scale: 0.95 }}
       whileHover={{ y: -5 }}
       transition={{ duration: 0.2 }}
-      className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg overflow-hidden cursor-pointer"
+      className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 shadow-[0_4px_20px_rgb(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(59,130,246,0.12)] hover:border-blue-200/50 overflow-hidden cursor-pointer relative group transition-all"
       onClick={() => onClick(peer)}
     >
-      <div className="p-5">
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+      <div className="p-5 relative z-10">
         <div className="flex items-start">
           <img 
             src={peer.avatar} 

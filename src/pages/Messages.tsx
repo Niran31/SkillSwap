@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { Send, User, Clock, MessageSquare } from 'lucide-react';
+import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
 // Define the shape of a message
@@ -33,8 +34,17 @@ const Messages: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated || !room) return;
 
+    // Fetch initial chat history
+    axios.get(`/api/messages/${room}`)
+      .then(res => {
+        if (res.data.messages) {
+          setMessageList(res.data.messages);
+        }
+      })
+      .catch(err => console.error("Failed to load chat history:", err));
+
     // Initialize socket connection
-    socket = io('http://localhost:5000');
+    socket = io();
     socket.emit('join_room', room);
 
     socket.on('receive_message', (data: MessageData) => {
