@@ -13,6 +13,29 @@ export interface Peer {
   availability?: string[];
 }
 
+export interface Review {
+  _id?: string;
+  reviewer: string;
+  reviewerName: string;
+  reviewee: string;
+  rating: number;
+  comment: string;
+  createdAt?: string;
+}
+
+export interface Session {
+  id?: string;
+  learnerId: string;
+  learnerName: string;
+  teacherId: string;
+  teacherName: string;
+  topic: string;
+  date: string;
+  time: string;
+  duration: string;
+  status?: 'scheduled' | 'completed' | 'cancelled';
+}
+
 export interface QuestionFormData {
   topic: string;
   difficulty: string;

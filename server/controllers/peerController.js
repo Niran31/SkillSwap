@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Peer from '../models/Peer.js';
+import User from '../models/User.js';
 
 // Mock data matching the original frontend
 const mockPeers = [
@@ -91,16 +92,26 @@ export const getPeers = async (req, res) => {
   }
 
   try {
-    const peers = await Peer.find({});
-    // If DB is empty, return the defaults so the app still functions
-    if (peers.length === 0) {
+    const users = await User.find({});
+    // If DB is completely empty for some reason, return the defaults so the app still functions
+    if (users.length === 0) {
       return res.status(200).json({ peers: mockPeers });
     }
     
-    // Map _id to id to support frontend format
-    const formattedPeers = peers.map(peer => ({
-      ...peer.toObject(),
-      id: peer._id.toString()
+    // Map _id to id to support frontend format and map Users to Peer structure
+    const formattedPeers = users.map(u => ({
+      id: u._id.toString(),
+      name: u.name,
+      avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150',
+      role: u.customSkills && u.customSkills.length > 0 ? 'teacher' : 'learner',
+      skills: u.customSkills && u.customSkills.length > 0 ? u.customSkills.map(s => s.name) : u.strengths,
+      rating: 4.5 + (Math.random() * 0.5),
+      reviews: Math.floor(Math.random() * 30),
+      distance: `${(Math.random() * 8 + 1).toFixed(1)} miles`,
+      matchScore: 80 + Math.floor(Math.random() * 19),
+      location: 'San Francisco, CA',
+      hourlyRate: 35 + Math.floor(Math.random() * 40),
+      availability: ['Weekdays 5-8pm', 'Weekends']
     }));
     
     res.status(200).json({ peers: formattedPeers });

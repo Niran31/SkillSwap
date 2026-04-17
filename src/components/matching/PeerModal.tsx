@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Peer } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { toast } from 'sonner';
 
 interface PeerModalProps {
   peer: Peer | null;
@@ -14,6 +16,102 @@ interface PeerModalProps {
 const PeerModal: React.FC<PeerModalProps> = ({ peer, isOpen, onClose }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = React.useState<'details' | 'reviews'>('details');
+  const [reviews, setReviews] = React.useState<any[]>([]);
+  const [isLoadingReviews, setIsLoadingReviews] = React.useState(false);
+  const [reviewForm, setReviewForm] = React.useState({ rating: 5, comment: '' });
+  const [hoveredStar, setHoveredStar] = React.useState(0);
+  const [selectedDate, setSelectedDate] = React.useState('');
+  const [selectedTime, setSelectedTime] = React.useState('');
+  const [isBooking, setIsBooking] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isOpen && peer) {
+      if (activeTab === 'reviews') {
+        fetchReviews();
+      }
+    } else {
+      // Reset state when closed
+      setActiveTab('details');
+      setReviewForm({ rating: 5, comment: '' });
+    }
+  }, [isOpen, peer, activeTab]);
+
+  const fetchReviews = async () => {
+    if (!peer) return;
+    try {
+      setIsLoadingReviews(true);
+      const res = await axios.get(`/api/reviews/${peer.id}`);
+      setReviews(res.data.reviews || []);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      toast.error('Failed to load reviews');
+    } finally {
+      setIsLoadingReviews(false);
+    }
+  };
+
+  const submitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !peer) {
+      toast.error('You must be logged in to leave a review');
+      return;
+    }
+    
+    try {
+      await axios.post('/api/reviews', {
+        reviewer: user.id,
+        reviewerName: user.name,
+        reviewee: peer.id,
+        rating: reviewForm.rating,
+        comment: reviewForm.comment
+      });
+      
+      toast.success('Review submitted successfully!');
+      setReviewForm({ rating: 5, comment: '' });
+      fetchReviews(); // Refresh list
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      toast.error('Failed to submit review');
+    }
+  };
+
+  const handleBookingSession = async () => {
+    if (!user || !peer) {
+      toast.error('You must be logged in to book a session');
+      return;
+    }
+
+    if (!selectedDate || !selectedTime) {
+      toast.error('Please select both a date and time');
+      return;
+    }
+
+    try {
+      setIsBooking(true);
+      await axios.post('/api/sessions', {
+        learnerId: user.id,
+        learnerName: user.name,
+        teacherId: peer.id,
+        teacherName: peer.name,
+        topic: `${peer.skills[0] || 'Skill'} Session`,
+        date: selectedDate,
+        time: selectedTime,
+        duration: '60 min'
+      });
+      
+      toast.success('Session booked successfully!');
+      setSelectedDate('');
+      setSelectedTime('');
+      onClose();
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error booking session:', error);
+      toast.error('Failed to book session');
+    } finally {
+      setIsBooking(false);
+    }
+  };
 
   // We use AnimatePresence in the parent, so returning null here if not open is fine.
   if (!isOpen || !peer) return null;
@@ -26,7 +124,7 @@ const PeerModal: React.FC<PeerModalProps> = ({ peer, isOpen, onClose }) => {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+        className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity"
       />
       
       {/* Modal */}
@@ -81,8 +179,36 @@ const PeerModal: React.FC<PeerModalProps> = ({ peer, isOpen, onClose }) => {
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-            <div>
+          {/* Tabs */}
+          <div className="flex border-b border-gray-200 mb-6">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`pb-3 px-4 font-medium text-sm transition-colors relative ${
+                activeTab === 'details' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Overview
+              {activeTab === 'details' && (
+                <motion.div layoutId="modal-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('reviews')}
+              className={`pb-3 px-4 font-medium text-sm transition-colors relative ${
+                activeTab === 'reviews' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Reviews ({peer.reviews})
+              {activeTab === 'reviews' && (
+                <motion.div layoutId="modal-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+              )}
+            </button>
+          </div>
+          
+          {activeTab === 'details' ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div>
               <h3 className="font-bold text-gray-900 mb-3 text-lg">Skills & Expertise</h3>
               <div className="flex flex-wrap gap-2">
                 {peer.skills.map((skill, idx) => (
@@ -161,7 +287,12 @@ const PeerModal: React.FC<PeerModalProps> = ({ peer, isOpen, onClose }) => {
                   {['Mon, Oct 15', 'Tue, Oct 16', 'Wed, Oct 17'].map((date, i) => (
                     <button 
                       key={i}
-                      className="p-3 text-center border-2 border-transparent bg-gray-50 rounded-lg hover:border-blue-500 focus:border-blue-600 focus:bg-blue-50 transition outline-none"
+                      onClick={() => setSelectedDate(date)}
+                      className={`p-3 text-center border-2 rounded-lg transition outline-none ${
+                        selectedDate === date 
+                          ? 'border-blue-600 bg-blue-50' 
+                          : 'border-transparent bg-gray-50 hover:border-blue-300'
+                      }`}
                     >
                       <span className="block text-sm font-bold text-gray-900">{date.split(',')[0]}</span>
                       <span className="block text-gray-500 text-xs mt-1">{date.split(',')[1]}</span>
@@ -173,7 +304,12 @@ const PeerModal: React.FC<PeerModalProps> = ({ peer, isOpen, onClose }) => {
                   {['2:00 PM', '3:00 PM', '4:30 PM', '5:45 PM'].map((time, i) => (
                     <button 
                       key={i}
-                      className="p-2 text-sm border-2 border-transparent bg-gray-50 text-gray-700 rounded-lg hover:border-blue-500 hover:text-blue-700 focus:border-blue-600 focus:bg-blue-50 font-medium transition outline-none"
+                      onClick={() => setSelectedTime(time)}
+                      className={`p-2 text-sm border-2 rounded-lg font-medium transition outline-none ${
+                        selectedTime === time
+                          ? 'border-blue-600 bg-blue-50 text-blue-700'
+                          : 'border-transparent bg-gray-50 text-gray-700 hover:border-blue-300'
+                      }`}
                     >
                       {time}
                     </button>
@@ -182,8 +318,93 @@ const PeerModal: React.FC<PeerModalProps> = ({ peer, isOpen, onClose }) => {
               </div>
             </div>
           )}
+          </>
+          ) : (
+            <div className="mb-8">
+              <h3 className="font-bold text-gray-900 mb-4 text-lg border-b pb-2">Leave a Review</h3>
+              
+              {user ? (
+                <form onSubmit={submitReview} className="mb-8 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+                    <div className="flex">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          className="mr-1 focus:outline-none transition-transform hover:scale-110"
+                          onMouseEnter={() => setHoveredStar(star)}
+                          onMouseLeave={() => setHoveredStar(0)}
+                          onClick={() => setReviewForm({ ...reviewForm, rating: star })}
+                        >
+                          <Star 
+                            className={`w-8 h-8 ${
+                              (hoveredStar || reviewForm.rating) >= star 
+                                ? 'fill-yellow-400 text-yellow-400' 
+                                : 'text-gray-300'
+                            }`} 
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Comment (Optional)</label>
+                    <textarea
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                      rows={3}
+                      placeholder="Share your experience..."
+                      value={reviewForm.comment}
+                      onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm"
+                  >
+                    Submit Review
+                  </button>
+                </form>
+              ) : (
+                <div className="mb-8 p-4 bg-gray-50 rounded-xl text-center border border-gray-100 text-gray-600">
+                  Please log in to leave a review.
+                </div>
+              )}
+              
+              <h3 className="font-bold text-gray-900 mb-4 text-lg">Past Reviews</h3>
+              {isLoadingReviews ? (
+                <div className="flex justify-center p-8">
+                  <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : reviews.length > 0 ? (
+                <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2">
+                  {reviews.map((review, idx) => (
+                    <div key={idx} className="bg-white border border-gray-100 p-4 rounded-xl shadow-sm">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-bold text-gray-900">{review.reviewerName}</span>
+                        <div className="flex text-yellow-400">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} className={`w-4 h-4 ${i < review.rating ? 'fill-current' : 'text-gray-300'}`} />
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-gray-600 text-sm">{review.comment || 'No comment provided.'}</p>
+                      <div className="text-xs text-gray-400 mt-2">
+                        {new Date(review.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center p-8 bg-gray-50 rounded-xl text-gray-500 border border-gray-100">
+                  <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                  <p>No reviews yet. Be the first to leave one!</p>
+                </div>
+              )}
+            </div>
+          )}
           
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-gray-100 mt-4 rounded-b-xl">
             <button 
               onClick={() => {
                 onClose();
@@ -194,15 +415,23 @@ const PeerModal: React.FC<PeerModalProps> = ({ peer, isOpen, onClose }) => {
               <MessageSquare className="w-5 h-5 mr-2" />
               Send Message
             </button>
-            {peer.role === 'teacher' ? (
-              <button className="flex-1 py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md hover:shadow-lg transition">
-                Confirm Booking
+            {peer.role === 'teacher' && activeTab === 'details' ? (
+              <button 
+                onClick={handleBookingSession}
+                disabled={isBooking || !selectedDate || !selectedTime}
+                className={`flex-1 py-3.5 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center ${
+                  !selectedDate || !selectedTime 
+                    ? 'bg-blue-400 cursor-not-allowed opacity-70' 
+                    : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
+                }`}
+              >
+                {isBooking ? 'Booking...' : 'Confirm Booking'}
               </button>
-            ) : (
+            ) : peer.role !== 'teacher' && activeTab === 'details' ? (
               <button className="flex-1 py-3.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-md hover:shadow-lg transition flex items-center justify-center">
                 Send Connection Request
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </motion.div>

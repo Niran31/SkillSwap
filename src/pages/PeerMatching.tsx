@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import { Peer } from '../types';
 import PeerCard from '../components/matching/PeerCard';
 import PeerModal from '../components/matching/PeerModal';
+import { SkeletonCard } from '../components/layout/SkeletonLoader';
 
 // Mock data for peers
 const mockPeers: Peer[] = [
@@ -118,17 +119,21 @@ const PeerMatching: React.FC = () => {
   const [maxDistance, setMaxDistance] = useState<number>(10);
   const [selectedPeer, setSelectedPeer] = useState<Peer | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
     if (isAuthenticated) {
-      axios.get('http://localhost:5000/api/peers')
+      setIsLoading(true);
+      axios.get('/api/peers')
         .then(res => {
-          setPeers(res.data.peers);
-          setFilteredPeers(res.data.peers);
+          const fetchedPeers = res.data.peers.filter((p: Peer) => p.id !== user?.id);
+          setPeers(fetchedPeers);
+          setFilteredPeers(fetchedPeers);
         })
-        .catch(err => console.error("Error fetching peers:", err));
+        .catch(err => console.error("Error fetching peers:", err))
+        .finally(() => setIsLoading(false));
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.id]);
 
   // All available skills from the peers
   const allSkills = Array.from(new Set(peers.flatMap(peer => peer.skills))).sort();
@@ -400,14 +405,25 @@ const PeerMatching: React.FC = () => {
             layout
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
-            <AnimatePresence>
-              {filteredPeers.map((peer) => (
-                <PeerCard key={peer.id} peer={peer} onClick={handlePeerSelect} />
-              ))}
-            </AnimatePresence>
+            {isLoading ? (
+              <>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </>
+            ) : (
+              <AnimatePresence>
+                {filteredPeers.map((peer) => (
+                  <PeerCard key={peer.id} peer={peer} onClick={handlePeerSelect} />
+                ))}
+              </AnimatePresence>
+            )}
           </motion.div>
           
-          {filteredPeers.length === 0 && (
+          {!isLoading && filteredPeers.length === 0 && (
             <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
               <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <h3 className="text-lg font-medium text-gray-700 mb-2">No matches found</h3>

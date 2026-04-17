@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { generateToken } from '../middleware/auth.js';
+import { processUserXp } from './gamificationController.js';
 
 // Helper to check if DB is connected
 const isDbConnected = () => mongoose.connection.readyState === 1;
@@ -165,39 +166,51 @@ export const getProfile = async (req, res) => {
   }
 };
 
-export const addXp = async (req, res) => {
-  const { userId, xpAmount } = req.body;
-  
+
+export const updateProfile = async (req, res) => {
+  const { id } = req.params;
+  const { bio, customSkills, learningStyle, strengths } = req.body;
+
   if (!isDbConnected()) {
-    return res.status(200).json({ message: 'XP added (Mock Mode)', added: xpAmount });
+    return res.status(200).json({ message: 'Profile updated (Mock Mode)' });
   }
-  
+
   try {
-    const user = await User.findById(userId);
+    const user = await User.findById(id);
     if (!user) return res.status(404).json({ message: 'User not found' });
-    
-    user.xp += xpAmount;
-    
-    // Level up calculation (every 100 XP is a level)
-    const newLevel = Math.floor(user.xp / 100) + 1;
-    if (newLevel > user.level) {
-      user.level = newLevel;
-      if (user.level === 5 && !user.badges.includes('Scholar')) user.badges.push('Scholar');
-      if (user.level === 10 && !user.badges.includes('Master')) user.badges.push('Master');
-    }
-    
+
+    if (bio !== undefined) user.bio = bio;
+    if (customSkills !== undefined) user.customSkills = customSkills;
+    if (learningStyle !== undefined) user.learningStyle = learningStyle;
+    if (strengths !== undefined) user.strengths = strengths;
+
     await user.save();
     
-    res.status(200).json({
-      message: 'XP Added successfully',
+    // Process +10 XP for updating the profile
+    await processUserXp(user._id, 10);
+    
+    // Reload user to retrieve updated gamification stats
+    const updatedUser = await User.findById(id);
+
+    res.status(200).json({ 
+      message: 'Profile updated successfully',
       user: {
-        id: user._id,
-        xp: user.xp,
-        level: user.level,
-        badges: user.badges
+        id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        learningStyle: updatedUser.learningStyle,
+        strengths: updatedUser.strengths,
+        xp: updatedUser.xp,
+        level: updatedUser.level,
+        streak: updatedUser.streak,
+        badges: updatedUser.badges,
+        bio: updatedUser.bio,
+        customSkills: updatedUser.customSkills
       }
     });
+
   } catch (error) {
+    console.error('Error updating profile:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

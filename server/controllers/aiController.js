@@ -38,7 +38,8 @@ const generateMockQuestions = (topic, questionCount) => {
 
 export const generateQuestions = async (req, res) => {
   const { topic, difficulty, learningStyle, questionCount } = req.body;
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  console.log("API Key length:", apiKey ? apiKey.length : 0);
 
   if (!apiKey || apiKey === 'your_gemini_api_key_here') {
     console.log('Using mock AI generator due to missing API key.');
@@ -49,7 +50,7 @@ export const generateQuestions = async (req, res) => {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `You are an educational AI. Generate ${questionCount} questions about ${topic}. The difficulty level is ${difficulty}. The questions should be tailored for a ${learningStyle} learner. Provide the output strictly as a JSON array of objects. Do not include any markdown format or code blocks around the JSON. 
 Each object must have the following keys:
@@ -72,5 +73,42 @@ Each object must have the following keys:
     return res.status(200).json({
       questions: generateMockQuestions(topic, questionCount)
     });
+  }
+};
+
+import SavedQuestion from '../models/SavedQuestion.js';
+import { isDbConnected } from '../index.js';
+
+export const saveQuestion = async (req, res) => {
+  const { userId, topic, questionText, options, correctAnswer, explanation, difficulty } = req.body;
+
+  if (!isDbConnected()) {
+    return res.status(200).json({ message: 'Question saved (Mock Mode)' });
+  }
+
+  try {
+    const saved = await SavedQuestion.create({
+      userId, topic, questionText, options, correctAnswer, explanation, difficulty
+    });
+    res.status(201).json({ message: 'Question saved successfully', saved });
+  } catch (error) {
+    console.error('Error saving question:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const getSavedQuestions = async (req, res) => {
+  const { userId } = req.params;
+
+  if (!isDbConnected()) {
+    return res.status(200).json({ questions: [] });
+  }
+
+  try {
+    const questions = await SavedQuestion.find({ userId }).sort({ createdAt: -1 });
+    res.status(200).json({ questions });
+  } catch (error) {
+    console.error('Error fetching saved questions:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };

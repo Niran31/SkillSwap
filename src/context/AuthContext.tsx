@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = '/api';
 
 interface User {
   id: string;
@@ -13,6 +13,8 @@ interface User {
   level: number;
   streak: number;
   badges: string[];
+  bio?: string;
+  customSkills?: { name: string; level: number }[];
 }
 
 interface AuthContextType {
