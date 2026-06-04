@@ -2,6 +2,7 @@ import React from 'react';
 import { Star, MapPin, MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Peer } from '../../types';
+import { useNavigate } from 'react-router-dom';
 
 interface PeerCardProps {
   peer: Peer;
@@ -9,6 +10,7 @@ interface PeerCardProps {
 }
 
 const PeerCard: React.FC<PeerCardProps> = ({ peer, onClick }) => {
+  const navigate = useNavigate();
   return (
     <motion.div 
       layout
@@ -73,7 +75,7 @@ const PeerCard: React.FC<PeerCardProps> = ({ peer, onClick }) => {
                 className="p-2 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
                 onClick={(e) => {
                   e.stopPropagation();
-                  // In a real app, this would open the chat
+                  navigate(`/messages?peerId=${peer.id}`);
                 }}
               >
                 <MessageSquare className="w-4 h-4" />

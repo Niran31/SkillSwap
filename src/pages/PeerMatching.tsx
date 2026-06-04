@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Users, 
   Search, 
@@ -109,9 +110,11 @@ type SortOption = 'match' | 'rating' | 'distance';
 
 const PeerMatching: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
+  const [searchParams] = useSearchParams();
+  const initialSearch = searchParams.get('search') || '';
   const [peers, setPeers] = useState<Peer[]>([]);
   const [filteredPeers, setFilteredPeers] = useState<Peer[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [filterRole, setFilterRole] = useState<FilterRole>('all');
   const [sortBy, setSortBy] = useState<SortOption>('match');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
@@ -123,17 +126,29 @@ const PeerMatching: React.FC = () => {
   
   useEffect(() => {
     if (isAuthenticated) {
+      localStorage.setItem('skillswap_visited_matching', 'true');
       setIsLoading(true);
       axios.get('/api/peers')
         .then(res => {
           const fetchedPeers = res.data.peers.filter((p: Peer) => p.id !== user?.id);
           setPeers(fetchedPeers);
-          setFilteredPeers(fetchedPeers);
+          // If there's an initial search from URL, auto-apply filters
+          if (initialSearch) {
+            let result = [...fetchedPeers];
+            result = result.filter(peer => 
+              peer.name.toLowerCase().includes(initialSearch.toLowerCase()) ||
+              peer.skills.some(skill => skill.toLowerCase().includes(initialSearch.toLowerCase()))
+            );
+            result.sort((a, b) => b.matchScore - a.matchScore);
+            setFilteredPeers(result);
+          } else {
+            setFilteredPeers(fetchedPeers);
+          }
         })
         .catch(err => console.error("Error fetching peers:", err))
         .finally(() => setIsLoading(false));
     }
-  }, [isAuthenticated, user?.id]);
+  }, [isAuthenticated, user?.id, initialSearch]);
 
   // All available skills from the peers
   const allSkills = Array.from(new Set(peers.flatMap(peer => peer.skills))).sort();

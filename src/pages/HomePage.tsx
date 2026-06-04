@@ -13,6 +13,8 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { Search } from 'lucide-react';
 
 interface HomePageProps {
   onSignupClick: () => void;
@@ -20,6 +22,17 @@ interface HomePageProps {
 
 const HomePage: React.FC<HomePageProps> = ({ onSignupClick }) => {
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const [heroSearch, setHeroSearch] = React.useState('');
+
+  const handleHeroSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (heroSearch.trim()) {
+      navigate(`/peer-matching?search=${encodeURIComponent(heroSearch.trim())}`);
+    } else {
+      navigate('/peer-matching');
+    }
+  };
 
   return (
     <div className="flex flex-col">
@@ -41,6 +54,31 @@ const HomePage: React.FC<HomePageProps> = ({ onSignupClick }) => {
               SkillSwap personalizes education through AI and cognitive profiling, 
               connecting you with peers who complement your learning style.
             </p>
+
+            {/* Skill Search Bar */}
+            <form 
+              onSubmit={handleHeroSearch}
+              className="flex items-center bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-1.5 mb-6 animate-slideFromBottom max-w-xl"
+              style={{ animationDelay: '150ms' }}
+            >
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-200" />
+                <input
+                  type="text"
+                  value={heroSearch}
+                  onChange={(e) => setHeroSearch(e.target.value)}
+                  placeholder="Search skills — React, Python, Design..."
+                  className="w-full pl-10 pr-4 py-3 bg-transparent text-white placeholder-blue-200 outline-none text-sm font-medium"
+                />
+              </div>
+              <button 
+                type="submit"
+                className="px-5 py-2.5 bg-white text-blue-600 font-semibold rounded-lg hover:bg-blue-50 transition text-sm shadow-sm"
+              >
+                Find Peers
+              </button>
+            </form>
+
             <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 animate-slideFromBottom" style={{ animationDelay: '200ms' }}>
               <button 
                 onClick={onSignupClick}
@@ -58,6 +96,7 @@ const HomePage: React.FC<HomePageProps> = ({ onSignupClick }) => {
                 </Link>
               ) : (
                 <button 
+                  onClick={() => document.getElementById('features-section')?.scrollIntoView({ behavior: 'smooth' })}
                   className="px-6 py-3 border border-white bg-transparent text-white font-medium rounded-lg hover:bg-white/10 transition flex items-center justify-center"
                 >
                   Learn More
@@ -72,7 +111,7 @@ const HomePage: React.FC<HomePageProps> = ({ onSignupClick }) => {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 bg-white">
+      <section id="features-section" className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">

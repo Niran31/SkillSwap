@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
 import Review from '../models/Review.js';
+import User from '../models/User.js';
+import { mockReviews } from '../mockDb.js';
 
 const isDbConnected = () => mongoose.connection.readyState === 1;
-
-import User from '../models/User.js';
 
 export const addReview = async (req, res) => {
   const { reviewer, reviewee, rating, comment } = req.body;
@@ -18,9 +18,11 @@ export const addReview = async (req, res) => {
   }
 
   if (!isDbConnected()) {
+    const review = { reviewer, reviewerName: reviewerName || 'Mock User', reviewee, rating, comment, createdAt: new Date() };
+    mockReviews.push(review);
     return res.status(201).json({
       message: 'Review added (Mock Mode)',
-      review: { reviewer, reviewerName: reviewerName || 'Mock User', reviewee, rating, comment, createdAt: new Date() }
+      review
     });
   }
 
@@ -47,12 +49,16 @@ export const getReviews = async (req, res) => {
   const { peerId } = req.params;
 
   if (!isDbConnected()) {
-    return res.status(200).json({
-      reviews: [
-        { reviewer: '1', reviewerName: 'Alex Johnson', reviewee: peerId, rating: 5, comment: 'Amazing teacher! Very patient and knowledgeable.', createdAt: new Date() },
-        { reviewer: '2', reviewerName: 'Maria Garcia', reviewee: peerId, rating: 4, comment: 'Great session, learned a lot about React hooks.', createdAt: new Date() }
-      ]
-    });
+    const reviews = mockReviews.filter(r => r.reviewee === peerId);
+    if (reviews.length === 0) {
+      return res.status(200).json({
+        reviews: [
+          { reviewer: '1', reviewerName: 'Alex Johnson', reviewee: peerId, rating: 5, comment: 'Amazing teacher! Very patient and knowledgeable.', createdAt: new Date() },
+          { reviewer: '2', reviewerName: 'Maria Garcia', reviewee: peerId, rating: 4, comment: 'Great session, learned a lot about React hooks.', createdAt: new Date() }
+        ]
+      });
+    }
+    return res.status(200).json({ reviews });
   }
 
   try {
@@ -67,7 +73,13 @@ export const getAverageRating = async (req, res) => {
   const { peerId } = req.params;
 
   if (!isDbConnected()) {
-    return res.status(200).json({ averageRating: 4.5, totalReviews: 2 });
+    const reviews = mockReviews.filter(r => r.reviewee === peerId);
+    if (reviews.length === 0) {
+      return res.status(200).json({ averageRating: 4.5, totalReviews: 2 });
+    }
+    const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+    const averageRating = (sum / reviews.length).toFixed(1);
+    return res.status(200).json({ averageRating: parseFloat(averageRating), totalReviews: reviews.length });
   }
 
   try {

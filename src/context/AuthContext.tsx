@@ -1,21 +1,8 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
+import { User } from '../types';
 
 const API_URL = '/api';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  learningStyle?: string;
-  strengths?: string[];
-  xp: number;
-  level: number;
-  streak: number;
-  badges: string[];
-  bio?: string;
-  customSkills?: { name: string; level: number }[];
-}
 
 interface AuthContextType {
   user: User | null;
@@ -23,24 +10,35 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  signup: (name: string, email: string, password: string, learningStyle?: string, strengths?: string[]) => Promise<void>;
+  signup: (
+    name: string,
+    email: string,
+    password: string,
+    learningStyle?: string,
+    strengths?: string[],
+    role?: 'student' | 'teacher' | 'management' | 'user',
+    inviteCode?: string,
+    academyName?: string
+  ) => Promise<void>;
   completeOnboarding: (learningStyle: string, strengths: string[]) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Initialize axios token immediately from localStorage to avoid race conditions during initial fetch
+const savedToken = localStorage.getItem('skillswap_token');
+if (savedToken) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // Check for saved user and token in localStorage
+    // Check for saved user in localStorage
     const savedUser = localStorage.getItem('skillswap_user');
-    const savedToken = localStorage.getItem('skillswap_token');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
-    }
-    if (savedToken) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
     }
   }, []);
 
@@ -58,9 +56,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (name: string, email: string, password: string, learningStyle?: string, strengths?: string[]) => {
+  const signup = async (
+    name: string,
+    email: string,
+    password: string,
+    learningStyle?: string,
+    strengths?: string[],
+    role?: 'student' | 'teacher' | 'management' | 'user',
+    inviteCode?: string,
+    academyName?: string
+  ) => {
     try {
-      const response = await axios.post(`${API_URL}/auth/signup`, { name, email, password, learningStyle, strengths });
+      const response = await axios.post(`${API_URL}/auth/signup`, { 
+        name, 
+        email, 
+        password, 
+        learningStyle, 
+        strengths,
+        role,
+        inviteCode,
+        academyName
+      });
       const { user, token } = response.data;
       setUser(user);
       localStorage.setItem('skillswap_user', JSON.stringify(user));

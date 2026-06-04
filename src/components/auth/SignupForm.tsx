@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface SignupFormProps {
   quizResults?: { learningStyle?: string; strengths?: string[] };
@@ -11,9 +12,13 @@ const SignupForm: React.FC<SignupFormProps> = ({ quizResults, onCloseModal }) =>
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState<'student' | 'teacher' | 'management' | 'user'>('user');
+  const [inviteCode, setInviteCode] = useState('');
+  const [academyName, setAcademyName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const { signup } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,13 +37,28 @@ const SignupForm: React.FC<SignupFormProps> = ({ quizResults, onCloseModal }) =>
       setError('Password must be at least 6 characters');
       return;
     }
+
+    if (role === 'management' && !academyName.trim()) {
+      setError('Please enter your School or Academy name');
+      return;
+    }
     
     setIsLoading(true);
     setError('');
     
     try {
-      await signup(name, email, password, quizResults?.learningStyle, quizResults?.strengths);
+      await signup(
+        name, 
+        email, 
+        password, 
+        quizResults?.learningStyle, 
+        quizResults?.strengths,
+        role,
+        inviteCode.trim() || undefined,
+        academyName.trim() || undefined
+      );
       if (onCloseModal) onCloseModal();
+      navigate('/dashboard');
     } catch (err) {
       setError('Error creating account. Please try again.');
     } finally {
@@ -113,6 +133,69 @@ const SignupForm: React.FC<SignupFormProps> = ({ quizResults, onCloseModal }) =>
           disabled={isLoading}
         />
       </div>
+
+      <div>
+        <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
+          Register As
+        </label>
+        <select
+          id="role"
+          value={role}
+          onChange={(e) => {
+            setRole(e.target.value as any);
+            setInviteCode('');
+            setAcademyName('');
+          }}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white"
+          disabled={isLoading}
+        >
+          <option value="user">General Peer Learner</option>
+          <option value="student">Student / Academy Learner</option>
+          <option value="teacher">Teacher / Instructor</option>
+          <option value="management">School / Academy Administrator</option>
+        </select>
+      </div>
+
+      {(role === 'student' || role === 'teacher') && (
+        <div className="animate-fadeIn">
+          <label htmlFor="invite-code" className="block text-sm font-medium text-gray-700 mb-1">
+            Invite / Academy Code <span className="text-gray-400 text-xs font-normal">(Optional)</span>
+          </label>
+          <input
+            id="invite-code"
+            type="text"
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            placeholder="e.g. SKILL123"
+            disabled={isLoading}
+          />
+          <p className="text-[11px] text-gray-500 mt-1">
+            Enter the code provided by your school to link your account.
+          </p>
+        </div>
+      )}
+
+      {role === 'management' && (
+        <div className="animate-fadeIn">
+          <label htmlFor="academy-name" className="block text-sm font-medium text-gray-700 mb-1">
+            Academy / School Name
+          </label>
+          <input
+            id="academy-name"
+            type="text"
+            value={academyName}
+            onChange={(e) => setAcademyName(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            placeholder="e.g. SkillSwap Technical Academy"
+            disabled={isLoading}
+            required
+          />
+          <p className="text-[11px] text-gray-500 mt-1">
+            This will create a new school portal where you can invite teachers and students.
+          </p>
+        </div>
+      )}
       
       <div className="flex items-start">
         <input

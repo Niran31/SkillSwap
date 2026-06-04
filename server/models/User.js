@@ -16,7 +16,14 @@ const userSchema = new mongoose.Schema({
   level: { type: Number, default: 1 },
   streak: { type: Number, default: 0 },
   badges: { type: [String], default: ['Newcomer'] },
-  lastLogin: { type: Date, default: Date.now }
+  lastLogin: { type: Date, default: Date.now },
+  role: { type: String, enum: ['student', 'teacher', 'management', 'user'], default: 'user' },
+  academyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization' },
+  courseProgress: [{
+    courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
+    completedLessons: [String],
+    quizScores: [{ quizId: String, score: Number }]
+  }]
 }, { timestamps: true });
 
 // Hash password before saving

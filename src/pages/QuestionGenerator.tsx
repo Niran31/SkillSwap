@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   BarChart3,
   Check,
@@ -16,15 +16,27 @@ import QuestionForm from '../components/generator/QuestionForm';
 import QuestionCard from '../components/generator/QuestionCard';
 
 const QuestionGenerator: React.FC = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, setUser, isAuthenticated } = useAuth();
   const [currentTopic, setCurrentTopic] = useState('');
   const [generatedQuestions, setGeneratedQuestions] = useState<Question[] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [answeredCorrectly, setAnsweredCorrectly] = useState<number[]>([]);
+  const [isSaved, setIsSaved] = useState(false);
+  
+  const questionsSectionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (generatedQuestions && generatedQuestions.length > 0) {
+      setTimeout(() => {
+        questionsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [generatedQuestions]);
 
   const handleSubmit = (data: QuestionFormData) => {
     setIsGenerating(true);
     setCurrentTopic(data.topic);
+    setIsSaved(false);
     
     // API call to the backend
     axios.post('/api/ai/generate', data)
@@ -46,19 +58,83 @@ const QuestionGenerator: React.FC = () => {
     setAnsweredCorrectly(prev => [...prev, questionId]);
 
     try {
-      await axios.post('/api/auth/xp', {
+      const response = await axios.post('/api/gamification/add-xp', {
         userId: user?.id,
-        xpAmount: 10
+        xpAmount: 10,
+        reason: 'AI Question Answered'
       });
       toast.success('Correct! +10 XP awarded to your profile.');
+      localStorage.setItem('skillswap_completed_question', 'true');
       
-      // Update local storage so that Dashboard is semi-aware before full sync
+      // Update local storage and AuthContext state
       if (user) {
-        const updatedUser = { ...user, xp: user.xp + 10 };
+        let updatedUser;
+        if (response.data.user) {
+          updatedUser = {
+            ...user,
+            xp: response.data.user.xp,
+            level: response.data.user.level,
+            badges: response.data.user.badges
+          };
+        } else {
+          updatedUser = { ...user, xp: user.xp + 10 };
+        }
+        setUser(updatedUser);
         localStorage.setItem('skillswap_user', JSON.stringify(updatedUser));
       }
     } catch (e) {
       console.error('Failed to add XP', e);
+    }
+  };
+
+  const handleSaveAll = async () => {
+    if (!generatedQuestions || !user || isSaved) return;
+    try {
+      for (const question of generatedQuestions) {
+        await axios.post('/api/ai/save', {
+          userId: user.id,
+          topic: currentTopic,
+          questionText: question.question,
+          options: question.answerOptions,
+          correctAnswer: question.correctAnswer,
+          explanation: question.explanation,
+          difficulty: 'Intermediate'
+        });
+      }
+      setIsSaved(true);
+      toast.success('Questions bookmarked successfully!');
+    } catch (e) {
+      console.error('Failed to save questions', e);
+      toast.error('Failed to bookmark questions.');
+    }
+  };
+
+  const handleDownload = () => {
+    if (!generatedQuestions) return;
+    const fileData = JSON.stringify(generatedQuestions, null, 2);
+    const blob = new Blob([fileData], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.download = `${currentTopic.toLowerCase().replace(/\s+/g, "_")}_questions.json`;
+    link.href = url;
+    link.click();
+    toast.success('Questions downloaded as JSON!');
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: `SkillSwap AI Questions - ${currentTopic}`,
+        text: `Check out these learning questions about ${currentTopic} on SkillSwap!`,
+        url: window.location.href,
+      }).then(() => {
+        toast.success('Shared successfully!');
+      }).catch(err => {
+        console.log('Error sharing:', err);
+      });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast.success('Link copied to clipboard!');
     }
   };
 
@@ -152,6 +228,7 @@ const QuestionGenerator: React.FC = () => {
         <AnimatePresence>
           {generatedQuestions && (
             <motion.div 
+              ref={questionsSectionRef}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="bg-white rounded-xl shadow-md border border-gray-200 p-6 md:p-8"
@@ -162,14 +239,27 @@ const QuestionGenerator: React.FC = () => {
                   Generated Questions: {currentTopic}
                 </h2>
                 <div className="flex space-x-2">
-                  <button className="p-2 text-gray-500 hover:text-blue-600 transition">
+                  <button 
+                    onClick={handleDownload}
+                    title="Download Questions"
+                    className="p-2 text-gray-500 hover:text-blue-600 transition"
+                  >
                     <Download className="w-5 h-5" />
                   </button>
-                  <button className="p-2 text-gray-500 hover:text-blue-600 transition">
+                  <button 
+                    onClick={handleShare}
+                    title="Share Questions"
+                    className="p-2 text-gray-500 hover:text-blue-600 transition"
+                  >
                     <Share2 className="w-5 h-5" />
                   </button>
-                  <button className="p-2 text-gray-500 hover:text-blue-600 transition">
-                    <Bookmark className="w-5 h-5" />
+                  <button 
+                    onClick={handleSaveAll}
+                    disabled={isSaved}
+                    title="Bookmark Questions"
+                    className={`p-2 transition ${isSaved ? 'text-green-600 cursor-default' : 'text-gray-500 hover:text-blue-600'}`}
+                  >
+                    <Bookmark className="w-5 h-5" fill={isSaved ? 'currentColor' : 'none'} />
                   </button>
                 </div>
               </div>

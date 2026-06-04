@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { generateToken } from '../middleware/auth.js';
 import { processUserXp } from './gamificationController.js';
+import { mockUsers, initializeMockUserData } from '../mockDb.js';
 
 // Helper to check if DB is connected
 const isDbConnected = () => mongoose.connection.readyState === 1;
@@ -10,20 +11,39 @@ export const login = async (req, res) => {
   const { email, password } = req.body;
   
   if (!isDbConnected()) {
-    // Graceful fallback to mock data
-    return res.status(200).json({
-      token: generateToken('mock-user-1'),
-      user: {
-        id: '1',
-        name: 'Demo User',
-        email,
-        learningStyle: 'Visual',
-        strengths: ['Logical-Mathematical'],
-        xp: 250,
-        level: 3,
-        streak: 5,
-        badges: ['Quick Learner', 'Helper']
+    let foundUser = Array.from(mockUsers.values()).find(u => u.email === email);
+    if (!foundUser) {
+      if (email === 'demo@example.com') {
+        foundUser = mockUsers.get('1');
+      } else if (email === 'teacher@example.com') {
+        foundUser = mockUsers.get('teacher-1');
+      } else if (email === 'management@example.com') {
+        foundUser = mockUsers.get('manager-1');
+      } else {
+        const mockId = 'mock-' + Math.random().toString(36).substring(2, 9);
+        foundUser = {
+          id: mockId,
+          name: email.split('@')[0],
+          email,
+          learningStyle: 'Visual',
+          strengths: ['Logical-Mathematical'],
+          xp: 250,
+          level: 3,
+          streak: 5,
+          badges: ['Quick Learner', 'Helper'],
+          bio: "I'm a passionate learner on SkillSwap!",
+          customSkills: [],
+          role: 'user',
+          academyId: null,
+          courseProgress: []
+        };
+        mockUsers.set(mockId, foundUser);
       }
+    }
+    initializeMockUserData(foundUser.id, foundUser.name);
+    return res.status(200).json({
+      token: generateToken(foundUser.id),
+      user: foundUser
     });
   }
 
@@ -63,7 +83,10 @@ export const login = async (req, res) => {
         xp: user.xp,
         level: user.level,
         streak: user.streak,
-        badges: user.badges
+        badges: user.badges,
+        role: user.role,
+        academyId: user.academyId,
+        courseProgress: user.courseProgress
       }
     });
   } catch (error) {
@@ -73,22 +96,63 @@ export const login = async (req, res) => {
 };
 
 export const signup = async (req, res) => {
-  const { name, email, password, learningStyle, strengths } = req.body;
+  const { name, email, password, learningStyle, strengths, role, inviteCode, academyName } = req.body;
 
   if (!isDbConnected()) {
-    return res.status(201).json({
-      token: generateToken('mock-' + Math.random().toString(36).substring(2, 9)),
-      user: {
-        id: Math.random().toString(36).substring(2, 9),
-        name,
-        email,
-        learningStyle: learningStyle || 'Visual',
-        strengths: strengths || [],
-        xp: 0,
-        level: 1,
-        streak: 0,
-        badges: ['Newcomer']
+    const mockId = 'mock-' + Math.random().toString(36).substring(2, 9);
+    const mockUser = {
+      id: mockId,
+      name,
+      email,
+      learningStyle: learningStyle || 'Visual',
+      strengths: strengths || [],
+      xp: 0,
+      level: 1,
+      streak: 0,
+      badges: ['Newcomer'],
+      bio: "I'm a passionate learner on SkillSwap!",
+      customSkills: [],
+      role: role || 'user',
+      academyId: null,
+      courseProgress: []
+    };
+
+    // If signing up as Management and creating an academy
+    if (mockUser.role === 'management' && academyName) {
+      const { mockOrganizations } = await import('../mockDb.js');
+      const newOrg = {
+        _id: 'org-' + Math.random().toString(36).substring(2, 9),
+        id: 'org-' + Math.random().toString(36).substring(2, 9),
+        name: academyName,
+        description: `Welcome to ${academyName}!`,
+        manager: mockId,
+        inviteCode: Math.random().toString(36).substring(2, 10).toUpperCase(),
+        teachers: [],
+        students: []
+      };
+      mockOrganizations.push(newOrg);
+      mockUser.academyId = newOrg._id;
+    }
+
+    // If joining an academy via invite code
+    if (inviteCode && (mockUser.role === 'student' || mockUser.role === 'teacher')) {
+      const { mockOrganizations } = await import('../mockDb.js');
+      const org = mockOrganizations.find(o => o.inviteCode === inviteCode.trim().toUpperCase());
+      if (org) {
+        mockUser.academyId = org._id;
+        if (mockUser.role === 'teacher') {
+          org.teachers.push(mockId);
+        } else {
+          org.students.push(mockId);
+        }
       }
+    }
+
+    mockUsers.set(mockId, mockUser);
+    initializeMockUserData(mockId, name);
+    return res.status(201).json({
+      token: generateToken(mockId),
+      user: mockUser
     });
   }
 
@@ -96,13 +160,46 @@ export const signup = async (req, res) => {
     const existing = await User.findOne({ email });
     if (existing) return res.status(409).json({ message: 'Email already exists' });
     
+    const userRole = role || 'user';
+    let academyId = null;
+
     const newUser = new User({ 
       name, 
       email, 
       password, // Will be auto-hashed by pre-save hook
       learningStyle: learningStyle || 'Visual',
-      strengths: strengths || []
+      strengths: strengths || [],
+      role: userRole
     });
+
+    if (userRole === 'management' && academyName) {
+      const Organization = (await import('../models/Organization.js')).default;
+      const orgCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const org = await Organization.create({
+        name: academyName,
+        description: `Welcome to ${academyName}!`,
+        manager: newUser._id,
+        inviteCode: orgCode,
+        teachers: [],
+        students: []
+      });
+      newUser.academyId = org._id;
+    }
+
+    if (inviteCode && (userRole === 'student' || userRole === 'teacher')) {
+      const Organization = (await import('../models/Organization.js')).default;
+      const org = await Organization.findOne({ inviteCode: inviteCode.trim().toUpperCase() });
+      if (org) {
+        newUser.academyId = org._id;
+        if (userRole === 'teacher') {
+          org.teachers.push(newUser._id);
+        } else {
+          org.students.push(newUser._id);
+        }
+        await org.save();
+      }
+    }
+
     await newUser.save();
     
     res.status(201).json({
@@ -116,7 +213,10 @@ export const signup = async (req, res) => {
         xp: newUser.xp,
         level: newUser.level,
         streak: newUser.streak,
-        badges: newUser.badges
+        badges: newUser.badges,
+        role: newUser.role,
+        academyId: newUser.academyId,
+        courseProgress: newUser.courseProgress
       }
     });
   } catch (error) {
@@ -129,19 +229,8 @@ export const getProfile = async (req, res) => {
   const { id } = req.params;
 
   if (!isDbConnected()) {
-    return res.status(200).json({
-      user: {
-        id,
-        name: 'Demo User',
-        email: 'demo@example.com',
-        learningStyle: 'Visual',
-        strengths: ['Logical-Mathematical'],
-        xp: 250,
-        level: 3,
-        streak: 5,
-        badges: ['Quick Learner', 'Helper']
-      }
-    });
+    const user = mockUsers.get(id) || mockUsers.get('1');
+    return res.status(200).json({ user });
   }
 
   try {
@@ -158,7 +247,10 @@ export const getProfile = async (req, res) => {
         xp: user.xp,
         level: user.level,
         streak: user.streak,
-        badges: user.badges
+        badges: user.badges,
+        role: user.role,
+        academyId: user.academyId,
+        courseProgress: user.courseProgress
       }
     });
   } catch (error) {
@@ -172,7 +264,19 @@ export const updateProfile = async (req, res) => {
   const { bio, customSkills, learningStyle, strengths } = req.body;
 
   if (!isDbConnected()) {
-    return res.status(200).json({ message: 'Profile updated (Mock Mode)' });
+    const user = mockUsers.get(id) || mockUsers.get('1');
+    if (bio !== undefined) user.bio = bio;
+    if (customSkills !== undefined) user.customSkills = customSkills;
+    if (learningStyle !== undefined) user.learningStyle = learningStyle;
+    if (strengths !== undefined) user.strengths = strengths;
+    
+    user.xp += 10;
+    user.level = Math.floor(user.xp / 100) + 1;
+    if (user.level >= 5 && !user.badges.includes('Scholar')) user.badges.push('Scholar');
+    if (user.level >= 10 && !user.badges.includes('Master')) user.badges.push('Master');
+    
+    mockUsers.set(user.id, user);
+    return res.status(200).json({ message: 'Profile updated (Mock Mode)', user });
   }
 
   try {
@@ -205,7 +309,10 @@ export const updateProfile = async (req, res) => {
         streak: updatedUser.streak,
         badges: updatedUser.badges,
         bio: updatedUser.bio,
-        customSkills: updatedUser.customSkills
+        customSkills: updatedUser.customSkills,
+        role: updatedUser.role,
+        academyId: updatedUser.academyId,
+        courseProgress: updatedUser.courseProgress
       }
     });
 

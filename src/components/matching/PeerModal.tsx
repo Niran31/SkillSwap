@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, MapPin, Star, Clock, Check, Calendar, MessageSquare } from 'lucide-react';
+import { X, MapPin, Star, Clock, Check, Calendar, MessageSquare, Brain, BarChart3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Peer } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -17,6 +17,77 @@ const PeerModal: React.FC<PeerModalProps> = ({ peer, isOpen, onClose }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = React.useState<'details' | 'reviews'>('details');
+
+  const getScoreForStyle = (
+    styleName: 'Visual' | 'Logical' | 'Auditory' | 'Kinesthetic',
+    dominantStyle?: string,
+    strengthsList: string[] = []
+  ) => {
+    if (!dominantStyle) return 50;
+    
+    const normDom = dominantStyle.toLowerCase();
+    const normName = styleName.toLowerCase();
+    
+    let isDom = false;
+    if (normName === 'visual') {
+      isDom = normDom === 'visual';
+    } else if (normName === 'logical') {
+      isDom = normDom === 'logical' || normDom === 'logical-mathematical';
+    } else if (normName === 'auditory') {
+      isDom = normDom === 'auditory' || normDom === 'auditory/verbal';
+    } else if (normName === 'kinesthetic') {
+      isDom = normDom === 'kinesthetic' || normDom === 'kinesthetic/active';
+    }
+
+    const hasStr = strengthsList.some(s => {
+      const ns = s.toLowerCase();
+      if (normName === 'visual') return ns === 'visual' || ns === 'visual-spatial';
+      if (normName === 'logical') return ns === 'logical' || ns === 'logical-mathematical';
+      if (normName === 'auditory') return ns === 'auditory' || ns === 'auditory/verbal' || ns === 'linguistic';
+      if (normName === 'kinesthetic') return ns === 'kinesthetic' || ns === 'kinesthetic/active' || ns === 'bodily-kinesthetic';
+      return ns.includes(normName);
+    });
+
+    const baseScores = {
+      Visual: 50,
+      Logical: 55,
+      Auditory: 60,
+      Kinesthetic: 50
+    };
+
+    if (isDom) return 95;
+    if (hasStr) return 80;
+    return baseScores[styleName];
+  };
+
+  const getMatchExplanation = () => {
+    if (!user || !peer) return '';
+    const userStyle = user.learningStyle || 'Visual';
+    const peerStyle = peer.learningStyle || 'Visual';
+    
+    if (userStyle.toLowerCase() === peerStyle.toLowerCase()) {
+      return `Perfect alignment! Both of you excel with the ${userStyle} style. ${peer.name}'s teaching methods naturally complement how you absorb new concepts.`;
+    }
+    
+    const userLower = userStyle.toLowerCase();
+    const peerLower = peerStyle.toLowerCase();
+    
+    if (
+      (userLower.includes('visual') && peerLower.includes('logical')) ||
+      (userLower.includes('logical') && peerLower.includes('visual'))
+    ) {
+      return `Visual & Logical synergy! You'll benefit from both graphical flowcharts and clear, step-by-step mathematical reasoning.`;
+    }
+    
+    if (
+      (userLower.includes('auditory') && peerLower.includes('kinesthetic')) ||
+      (userLower.includes('kinesthetic') && peerLower.includes('auditory'))
+    ) {
+      return `Active audio synergy! Combining high-level spoken explanations with hands-on, practical coding labs helps lock in retention.`;
+    }
+    
+    return `Complementary pairing! ${peer.name}'s dominant ${peerStyle} style brings a fresh perspective to your ${userStyle} style.`;
+  };
   const [reviews, setReviews] = React.useState<any[]>([]);
   const [isLoadingReviews, setIsLoadingReviews] = React.useState(false);
   const [reviewForm, setReviewForm] = React.useState({ rating: 5, comment: '' });
@@ -101,6 +172,7 @@ const PeerModal: React.FC<PeerModalProps> = ({ peer, isOpen, onClose }) => {
       });
       
       toast.success('Session booked successfully!');
+      localStorage.setItem('skillswap_booked_session', 'true');
       setSelectedDate('');
       setSelectedTime('');
       onClose();
@@ -266,6 +338,76 @@ const PeerModal: React.FC<PeerModalProps> = ({ peer, isOpen, onClose }) => {
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div className="mb-8">
+            <h3 className="font-bold text-gray-900 mb-3 text-lg flex items-center">
+              <span className="bg-indigo-100 text-indigo-800 p-1.5 rounded-lg mr-2 inline-flex">
+                <Brain className="w-5 h-5" />
+              </span>
+              Cognitive Match Visualizer
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              A side-by-side comparison of your cognitive learning style and {peer.name}'s profile across core modalities.
+            </p>
+            
+            <div className="space-y-4 bg-gray-50/50 p-5 rounded-xl border border-gray-100">
+              {[
+                { id: 'Visual', label: 'Visual Modal' },
+                { id: 'Logical', label: 'Logical-Mathematical Modal' },
+                { id: 'Auditory', label: 'Auditory/Verbal Modal' },
+                { id: 'Kinesthetic', label: 'Kinesthetic/Active Modal' }
+              ].map((modal, idx) => {
+                const userScore = getScoreForStyle(modal.id as any, user?.learningStyle, user?.strengths);
+                const peerScore = getScoreForStyle(modal.id as any, peer.learningStyle, peer.strengths);
+                
+                return (
+                  <div key={idx} className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="font-semibold text-gray-700">{modal.label}</span>
+                      <div className="flex gap-4 text-xs font-bold">
+                        <span className="text-blue-600">You: {userScore}%</span>
+                        <span className="text-indigo-600">{peer.name}: {peerScore}%</span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      {/* User Bar */}
+                      <div className="flex items-center gap-2">
+                        <span className="w-8 text-[9px] font-extrabold text-blue-500 text-right">YOU</span>
+                        <div className="flex-1 bg-gray-200 h-2.5 rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${userScore}%` }}
+                            transition={{ duration: 0.8, delay: idx * 0.08 }}
+                            className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full"
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Peer Bar */}
+                      <div className="flex items-center gap-2">
+                        <span className="w-8 text-[9px] font-extrabold text-indigo-500 text-right">PEER</span>
+                        <div className="flex-1 bg-gray-200 h-2.5 rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${peerScore}%` }}
+                            transition={{ duration: 0.8, delay: idx * 0.08 + 0.12 }}
+                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Matching synergy text */}
+            <div className="mt-3 text-xs bg-indigo-50 text-indigo-700 p-3 rounded-lg border border-indigo-100 flex items-start gap-2">
+              <span className="font-semibold flex-shrink-0">Synergy Analysis:</span>
+              <span>{getMatchExplanation()}</span>
             </div>
           </div>
           

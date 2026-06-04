@@ -23,17 +23,19 @@ import {
   Check,
   Users,
   Star,
-  X
+  X,
+  Bookmark
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 
-type TabType = 'overview' | 'skills' | 'achievements' | 'sessions';
+type TabType = 'overview' | 'skills' | 'achievements' | 'sessions' | 'saved-questions';
 
 const ProfilePage: React.FC = () => {
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, setUser, logout, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const navigate = useNavigate();
 
@@ -46,6 +48,19 @@ const ProfilePage: React.FC = () => {
     sessionsAttended: 0,
     averageRating: 0
   });
+
+  const [showSkillModal, setShowSkillModal] = useState(false);
+  const [editingSkillIndex, setEditingSkillIndex] = useState<number | null>(null);
+  const [skillName, setSkillName] = useState('');
+  const [skillLevel, setSkillLevel] = useState(50);
+  
+  const [savedQuestions, setSavedQuestions] = useState<any[]>([]);
+  const [isLoadingSaved, setIsLoadingSaved] = useState(false);
+  
+  // Interactive Practice Mode states
+  const [practiceMode, setPracticeMode] = useState(false);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
+
 
   React.useEffect(() => {
     if (user?.id) {
@@ -60,19 +75,191 @@ const ProfilePage: React.FC = () => {
           totalHours: Math.round(fetchedSessions.length * 1.5)
         }));
       }).catch(err => console.error("Error fetching sessions:", err));
+
+      // Fetch saved questions
+      setIsLoadingSaved(true);
+      axios.get(`/api/ai/saved/${user.id}`).then(res => {
+        setSavedQuestions(res.data.questions || []);
+      }).catch(err => console.error("Error fetching saved questions:", err))
+        .finally(() => setIsLoadingSaved(false));
     }
   }, [user]);
 
+
+  // Dynamic learning style data for visualizer
+  const dominantStyle = user?.learningStyle || 'Visual';
+  const strengths = user?.strengths || [];
+  const cognitiveStyles = [
+    { 
+      name: 'Visual Modal', 
+      description: 'Understanding via diagrams, flowcharts, spatial reasoning, and visual learning aids.', 
+      value: dominantStyle === 'Visual' ? 95 : (strengths.includes('Visual') ? 80 : 50),
+      color: 'from-blue-500 to-cyan-400',
+      textColor: 'text-blue-600',
+      bgColor: 'bg-blue-50'
+    },
+    { 
+      name: 'Logical-Mathematical Modal', 
+      description: 'Analyzing complex systems, logic statements, code syntax, and numeric patterns.', 
+      value: dominantStyle === 'Logical-Mathematical' || dominantStyle === 'Logical' ? 95 : (strengths.includes('Logical-Mathematical') || strengths.includes('Logical') ? 80 : 70),
+      color: 'from-green-500 to-emerald-400',
+      textColor: 'text-green-600',
+      bgColor: 'bg-green-50'
+    },
+    { 
+      name: 'Auditory/Verbal Modal', 
+      description: 'Retaining information through vocal discussions, peer explanations, and spoken word.', 
+      value: dominantStyle === 'Auditory' || dominantStyle === 'Auditory/Verbal' ? 95 : (strengths.includes('Auditory') || strengths.includes('Auditory/Verbal') ? 80 : 45),
+      color: 'from-purple-500 to-indigo-400',
+      textColor: 'text-purple-600',
+      bgColor: 'bg-purple-50'
+    },
+    { 
+      name: 'Kinesthetic/Active Modal', 
+      description: 'Hands-on practice, physical trial-and-error, code compilation, and concrete building.', 
+      value: dominantStyle === 'Kinesthetic' || dominantStyle === 'Kinesthetic/Active' ? 95 : (strengths.includes('Kinesthetic') || strengths.includes('Kinesthetic/Active') ? 80 : 60),
+      color: 'from-pink-500 to-rose-400',
+      textColor: 'text-pink-600',
+      bgColor: 'bg-pink-50'
+    }
+  ];
+
   const saveBio = async () => {
     try {
-      await axios.put(`/api/auth/profile/${user?.id}`, { bio });
+      const response = await axios.put(`/api/auth/profile/${user?.id}`, { bio });
       setIsEditingBio(false);
       toast.success('Bio updated successfully!');
-      if (user) user.bio = bio; // optimistic update
+      if (response.data.user) {
+        setUser(response.data.user);
+        localStorage.setItem('skillswap_user', JSON.stringify(response.data.user));
+      } else if (user) {
+        const updatedUser = { ...user, bio };
+        setUser(updatedUser);
+        localStorage.setItem('skillswap_user', JSON.stringify(updatedUser));
+      }
     } catch (e) {
       toast.error('Failed to update bio.');
     }
   };
+
+  const handleSaveSkill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!skillName.trim()) {
+      toast.error('Skill name cannot be empty');
+      return;
+    }
+    const currentSkills = user?.customSkills || [];
+    let updatedSkills = [...currentSkills];
+    
+    if (editingSkillIndex !== null) {
+      updatedSkills[editingSkillIndex] = { name: skillName.trim(), level: Number(skillLevel) };
+    } else {
+      const existsIndex = currentSkills.findIndex(s => s.name.toLowerCase() === skillName.trim().toLowerCase());
+      if (existsIndex > -1) {
+        updatedSkills[existsIndex] = { name: skillName.trim(), level: Number(skillLevel) };
+      } else {
+        updatedSkills.push({ name: skillName.trim(), level: Number(skillLevel) });
+      }
+    }
+
+    try {
+      const response = await axios.put(`/api/auth/profile/${user?.id}`, { customSkills: updatedSkills });
+      toast.success(editingSkillIndex !== null ? 'Skill updated!' : 'Skill added!');
+      setShowSkillModal(false);
+      setSkillName('');
+      setSkillLevel(50);
+      setEditingSkillIndex(null);
+      if (response.data.user) {
+        setUser(response.data.user);
+        localStorage.setItem('skillswap_user', JSON.stringify(response.data.user));
+      } else if (user) {
+        const updatedUser = { ...user, customSkills: updatedSkills };
+        setUser(updatedUser);
+        localStorage.setItem('skillswap_user', JSON.stringify(updatedUser));
+      }
+    } catch (err) {
+      toast.error('Failed to save skill.');
+    }
+  };
+
+  const handleDeleteSkill = async (index: number) => {
+    if (!confirm('Are you sure you want to delete this skill?')) return;
+    const currentSkills = user?.customSkills || [];
+    const updatedSkills = currentSkills.filter((_, i) => i !== index);
+
+    try {
+      const response = await axios.put(`/api/auth/profile/${user?.id}`, { customSkills: updatedSkills });
+      toast.success('Skill deleted!');
+      if (response.data.user) {
+        setUser(response.data.user);
+        localStorage.setItem('skillswap_user', JSON.stringify(response.data.user));
+      } else if (user) {
+        const updatedUser = { ...user, customSkills: updatedSkills };
+        setUser(updatedUser);
+        localStorage.setItem('skillswap_user', JSON.stringify(updatedUser));
+      }
+    } catch (err) {
+      toast.error('Failed to delete skill.');
+    }
+  };
+
+  const openAddSkill = () => {
+    setSkillName('');
+    setSkillLevel(50);
+    setEditingSkillIndex(null);
+    setShowSkillModal(true);
+  };
+
+  const openEditSkill = (index: number) => {
+    const skill = user?.customSkills?.[index];
+    if (skill) {
+      setSkillName(skill.name);
+      setSkillLevel(skill.level);
+      setEditingSkillIndex(index);
+      setShowSkillModal(true);
+    }
+  };
+
+  const handleDeleteSavedQuestion = async (questionId: string) => {
+
+    if (!confirm('Are you sure you want to delete this saved question?')) return;
+    try {
+      await axios.delete(`/api/ai/saved/${questionId}`);
+      toast.success('Saved question deleted!');
+      setSavedQuestions(prev => prev.filter(q => q._id !== questionId && q.id !== questionId));
+      
+      // Cleanup answer tracking
+      if (selectedAnswers[questionId]) {
+        const updated = { ...selectedAnswers };
+        delete updated[questionId];
+        setSelectedAnswers(updated);
+      }
+    } catch (err) {
+      console.error('Failed to delete saved question:', err);
+      toast.error('Failed to delete saved question.');
+    }
+  };
+
+  const handleSelectAnswer = (questionId: string, answer: string, correctAnswer: string) => {
+    if (selectedAnswers[questionId]) return; // Already answered
+    
+    setSelectedAnswers(prev => ({
+      ...prev,
+      [questionId]: answer
+    }));
+
+    if (answer === correctAnswer) {
+      toast.success('Correct answer! Good job!');
+    } else {
+      toast.error(`Incorrect! The correct answer is: ${correctAnswer}`);
+    }
+  };
+
+  const handleResetQuiz = () => {
+    setSelectedAnswers({});
+    toast.success('Quiz reset! Try practicing again.');
+  };
+
 
   if (!isAuthenticated) {
     return (
@@ -316,6 +503,17 @@ const ProfilePage: React.FC = () => {
               <Calendar className="w-4 h-4 mr-2" />
               Sessions
             </button>
+            <button
+              onClick={() => setActiveTab('saved-questions' as TabType)}
+              className={`mr-8 py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${
+                activeTab === ('saved-questions' as TabType)
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Bookmark className="w-4 h-4 mr-2" />
+              Saved Questions
+            </button>
           </nav>
         </div>
         
@@ -389,6 +587,46 @@ const ProfilePage: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                </div>
+              </div>
+
+              {/* Cognitive Profile Visualizer */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 className="font-bold text-gray-900 mb-2 flex items-center">
+                  <BarChart3 className="w-5 h-5 text-indigo-600 mr-2" />
+                  Cognitive Learning Profile
+                </h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  SkillSwap's cognitive analysis of your learning habits, visual retention, logical reasoning, and active coding feedback.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {cognitiveStyles.map((style, idx) => {
+                    const isDominant = style.name.startsWith(dominantStyle);
+                    return (
+                      <div key={idx} className={`p-4 rounded-xl border transition-all ${isDominant ? 'border-indigo-200 bg-indigo-50/30 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-semibold text-gray-900 flex items-center">
+                            {style.name}
+                            {isDominant && (
+                              <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full animate-pulse">
+                                Dominant Modality
+                              </span>
+                            )}
+                          </span>
+                          <span className={`text-sm font-bold ${style.textColor}`}>{style.value}%</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mb-3">{style.description}</p>
+                        <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${style.value}%` }}
+                            transition={{ duration: 0.8, delay: idx * 0.1 }}
+                            className={`h-full bg-gradient-to-r ${style.color} rounded-full`}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               
@@ -478,7 +716,10 @@ const ProfilePage: React.FC = () => {
                   <div className="text-center py-8 text-gray-500">
                     <Calendar className="w-12 h-12 mx-auto text-gray-300 mb-3" />
                     <p>No upcoming sessions</p>
-                    <button className="mt-2 text-blue-600 font-medium hover:text-blue-800 transition">
+                    <button 
+                      onClick={() => navigate('/peer-matching')}
+                      className="mt-2 text-blue-600 font-medium hover:text-blue-800 transition"
+                    >
                       Schedule a session
                     </button>
                   </div>
@@ -492,7 +733,10 @@ const ProfilePage: React.FC = () => {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold text-gray-900">My Skills</h2>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm">
+                <button 
+                  onClick={openAddSkill}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
+                >
                   Add New Skill
                 </button>
               </div>
@@ -536,10 +780,16 @@ const ProfilePage: React.FC = () => {
                           </div>
                         </div>
                         <div className="mt-4 md:mt-0 md:ml-4 flex">
-                          <button className="text-gray-400 hover:text-gray-600 mr-2">
+                          <button 
+                            onClick={() => openEditSkill(index)}
+                            className="text-gray-400 hover:text-gray-600 mr-2"
+                          >
                             <Edit className="w-4 h-4" />
                           </button>
-                          <button className="text-gray-400 hover:text-red-600">
+                          <button 
+                            onClick={() => handleDeleteSkill(index)}
+                            className="text-gray-400 hover:text-red-600"
+                          >
                             <X className="w-4 h-4" />
                           </button>
                         </div>
@@ -707,7 +957,10 @@ const ProfilePage: React.FC = () => {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold text-gray-900">My Sessions</h2>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm">
+                <button 
+                  onClick={() => navigate('/peer-matching')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
+                >
                   Schedule New Session
                 </button>
               </div>
@@ -794,8 +1047,253 @@ const ProfilePage: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Saved Questions Tab */}
+          {activeTab === 'saved-questions' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Saved Study Hub</h2>
+                  <p className="text-sm text-gray-600">Review bookmarks or practice them in interactive Quiz Mode.</p>
+                </div>
+                <div className="flex space-x-3 w-full sm:w-auto">
+                  {savedQuestions.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setPracticeMode(!practiceMode);
+                        setSelectedAnswers({});
+                      }}
+                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-all border ${
+                        practiceMode 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md hover:bg-indigo-700' 
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {practiceMode ? 'Exit Practice Mode' : 'Practice Quiz Mode'}
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => navigate('/question-generator')}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium shadow-sm hover:shadow-md"
+                  >
+                    Generate More
+                  </button>
+                </div>
+              </div>
+              
+              {isLoadingSaved ? (
+                <div className="bg-white rounded-xl border border-gray-200 p-8 flex justify-center">
+                  <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : savedQuestions.length === 0 ? (
+                <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
+                  <Bookmark className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="font-medium text-gray-700">No bookmarked questions yet</p>
+                  <p className="text-gray-500 text-sm mt-1">Generate questions using the AI generator and bookmark them to study later.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {practiceMode && (
+                    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 p-4 rounded-xl flex justify-between items-center">
+                      <div>
+                        <span className="text-xs font-semibold uppercase tracking-wider text-indigo-700">Practice Score</span>
+                        <h4 className="text-lg font-bold text-indigo-950">
+                          {Object.keys(selectedAnswers).length} / {savedQuestions.length} Answered
+                        </h4>
+                      </div>
+                      {Object.keys(selectedAnswers).length > 0 && (
+                        <button
+                          onClick={handleResetQuiz}
+                          className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+                        >
+                          Reset Quiz
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    {savedQuestions.map((q, index) => {
+                      const questionId = q._id || String(index);
+                      const isAnswered = !!selectedAnswers[questionId];
+                      const selectedOpt = selectedAnswers[questionId];
+                      
+                      return (
+                        <div key={questionId} className="bg-white border border-gray-200 p-5 rounded-xl shadow-sm hover:shadow-md transition relative group">
+                          {/* Remove button */}
+                          <button
+                            onClick={() => handleDeleteSavedQuestion(q._id)}
+                            className="absolute top-4 right-4 text-gray-400 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-red-50"
+                            title="Remove from saved"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+
+                          <div className="flex justify-between items-start mb-2 pr-8">
+                            <span className="text-xs font-semibold bg-blue-100 text-blue-800 rounded-full px-2 py-0.5">
+                              {q.topic}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {q.createdAt ? new Date(q.createdAt).toLocaleDateString() : 'Just now'}
+                            </span>
+                          </div>
+
+                          <h4 className="font-semibold text-gray-900 text-base mb-3 pr-6">{q.questionText}</h4>
+                          
+                          {q.options && q.options.length > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                              {q.options.map((opt: string, i: number) => {
+                                const isCorrectOpt = opt === q.correctAnswer;
+                                const isChosenOpt = opt === selectedOpt;
+                                
+                                let optClass = "border-gray-200 text-gray-700 bg-white hover:border-gray-300 hover:bg-gray-50 cursor-pointer";
+                                
+                                if (practiceMode) {
+                                  if (isAnswered) {
+                                    if (isCorrectOpt) {
+                                      optClass = "border-green-500 bg-green-50 text-green-700 font-semibold cursor-default";
+                                    } else if (isChosenOpt) {
+                                      optClass = "border-red-500 bg-red-50 text-red-700 font-semibold cursor-default";
+                                    } else {
+                                      optClass = "border-gray-200 text-gray-400 bg-gray-50/50 cursor-default";
+                                    }
+                                  } else {
+                                    optClass = "border-indigo-150 text-indigo-950 bg-indigo-50/20 hover:border-indigo-300 hover:bg-indigo-50/40 cursor-pointer";
+                                  }
+                                } else {
+                                  // Study sheet view
+                                  if (isCorrectOpt) {
+                                    optClass = "border-green-500 bg-green-50 text-green-700 font-semibold";
+                                  }
+                                }
+
+                                return (
+                                  <button 
+                                    key={i} 
+                                    disabled={practiceMode && isAnswered}
+                                    onClick={() => practiceMode && handleSelectAnswer(questionId, opt, q.correctAnswer)}
+                                    className={`p-2.5 rounded-lg border text-left text-sm transition-all flex justify-between items-center w-full ${optClass}`}
+                                  >
+                                    <span>{opt}</span>
+                                    {practiceMode && isAnswered && isCorrectOpt && (
+                                      <Check className="w-4 h-4 text-green-600 flex-shrink-0" />
+                                    )}
+                                    {practiceMode && isAnswered && isChosenOpt && !isCorrectOpt && (
+                                      <X className="w-4 h-4 text-red-600 flex-shrink-0" />
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {(!practiceMode || isAnswered) && q.explanation && (
+                            <motion.div 
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              className="p-3 bg-blue-50/50 text-sm text-gray-700 rounded-lg border-l-4 border-blue-500 mt-2"
+                            >
+                              <strong>Explanation:</strong> {q.explanation}
+                            </motion.div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
+      
+      {/* Skill Modal */}
+      <AnimatePresence>
+        {showSkillModal && (
+          <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSkillModal(false)}
+              className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity"
+            />
+            
+            {/* Modal Box */}
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden relative z-10 p-6"
+            >
+              <button 
+                onClick={() => setShowSkillModal(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-full hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                {editingSkillIndex !== null ? 'Edit Skill' : 'Add New Skill'}
+              </h2>
+
+              <form onSubmit={handleSaveSkill} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Skill Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={skillName}
+                    onChange={(e) => setSkillName(e.target.value)}
+                    placeholder="e.g. React, Python, UI Design"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Proficiency Level ({skillLevel}%)
+                  </label>
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    step="5"
+                    value={skillLevel}
+                    onChange={(e) => setSkillLevel(Number(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Beginner</span>
+                    <span>Intermediate</span>
+                    <span>Advanced</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSkillModal(false)}
+                    className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition shadow-sm"
+                  >
+                    Save Skill
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

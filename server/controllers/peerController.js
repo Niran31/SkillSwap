@@ -16,7 +16,9 @@ const mockPeers = [
     matchScore: 92,
     location: 'San Francisco, CA',
     hourlyRate: 45,
-    availability: ['Mon 3-6pm', 'Wed 2-8pm', 'Fri 1-5pm']
+    availability: ['Mon 3-6pm', 'Wed 2-8pm', 'Fri 1-5pm'],
+    learningStyle: 'Logical',
+    strengths: ['Logical-Mathematical', 'Linguistic']
   },
   {
     id: '2',
@@ -28,7 +30,9 @@ const mockPeers = [
     reviews: 12,
     distance: '4.2 miles',
     matchScore: 88,
-    location: 'Oakland, CA'
+    location: 'Oakland, CA',
+    learningStyle: 'Visual',
+    strengths: ['Visual-Spatial', 'Intrapersonal']
   },
   {
     id: '3',
@@ -42,7 +46,9 @@ const mockPeers = [
     matchScore: 95,
     location: 'San Francisco, CA',
     hourlyRate: 55,
-    availability: ['Tue 5-9pm', 'Thu 6-8pm', 'Sat 10am-2pm']
+    availability: ['Tue 5-9pm', 'Thu 6-8pm', 'Sat 10am-2pm'],
+    learningStyle: 'Logical',
+    strengths: ['Logical-Mathematical', 'Intrapersonal']
   },
   {
     id: '4',
@@ -54,7 +60,9 @@ const mockPeers = [
     reviews: 8,
     distance: '3.5 miles',
     matchScore: 84,
-    location: 'Berkeley, CA'
+    location: 'Berkeley, CA',
+    learningStyle: 'Kinesthetic',
+    strengths: ['Bodily-Kinesthetic', 'Interpersonal']
   },
   {
     id: '5',
@@ -68,7 +76,9 @@ const mockPeers = [
     matchScore: 90,
     location: 'San Francisco, CA',
     hourlyRate: 40,
-    availability: ['Mon 4-8pm', 'Wed 6-9pm', 'Sun 1-6pm']
+    availability: ['Mon 4-8pm', 'Wed 6-9pm', 'Sun 1-6pm'],
+    learningStyle: 'Visual',
+    strengths: ['Visual-Spatial', 'Musical']
   },
   {
     id: '6',
@@ -80,7 +90,9 @@ const mockPeers = [
     reviews: 5,
     distance: '6.8 miles',
     matchScore: 82,
-    location: 'Daly City, CA'
+    location: 'Daly City, CA',
+    learningStyle: 'Auditory',
+    strengths: ['Linguistic', 'Interpersonal']
   }
 ];
 
@@ -111,7 +123,9 @@ export const getPeers = async (req, res) => {
       matchScore: 80 + Math.floor(Math.random() * 19),
       location: 'San Francisco, CA',
       hourlyRate: 35 + Math.floor(Math.random() * 40),
-      availability: ['Weekdays 5-8pm', 'Weekends']
+      availability: ['Weekdays 5-8pm', 'Weekends'],
+      learningStyle: u.learningStyle || 'Visual',
+      strengths: u.strengths || []
     }));
     
     res.status(200).json({ peers: formattedPeers });

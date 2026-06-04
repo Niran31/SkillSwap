@@ -8,8 +8,15 @@ import QuestionGenerator from './pages/QuestionGenerator';
 import PeerMatching from './pages/PeerMatching';
 import ProfilePage from './pages/ProfilePage';
 import Messages from './pages/Messages';
+import LMSCourses from './pages/LMSCourses';
+import LMSCourseViewer from './pages/LMSCourseViewer';
+import LMSCourseBuilder from './pages/LMSCourseBuilder';
+import AcademyManager from './pages/AcademyManager';
+import StudyCircles from './pages/StudyCircles';
+import Analytics from './pages/Analytics';
 import { AuthProvider } from './context/AuthContext';
 import AuthModal from './components/auth/AuthModal';
+
 import { Toaster } from 'sonner';
 
 function App() {
@@ -39,12 +46,19 @@ function App() {
             <Routes>
               <Route path="/" element={<HomePage onSignupClick={openSignupModal} />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/courses" element={<LMSCourses />} />
+              <Route path="/course-viewer/:courseId" element={<LMSCourseViewer />} />
+              <Route path="/course-builder" element={<LMSCourseBuilder />} />
+              <Route path="/academy-manager" element={<AcademyManager />} />
               <Route path="/question-generator" element={<QuestionGenerator />} />
               <Route path="/peer-matching" element={<PeerMatching />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/messages" element={<Messages />} />
+              <Route path="/study-circles" element={<StudyCircles />} />
+              <Route path="/analytics" element={<Analytics />} />
             </Routes>
           </main>
+
           <Footer />
           <AuthModal 
             isOpen={isAuthModalOpen} 
